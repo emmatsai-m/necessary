@@ -72,6 +72,8 @@ label.field-label {
 .btn:active { transform: scale(0.97); }
 .btn-primary { background: var(--delft); color: var(--panel); width: 100%; }
 .btn-primary:hover { background: var(--delft-deep); }
+.btn-secondary { background: transparent; color: var(--ink-soft); border: 1px solid var(--line); width: 100%; margin-top: 8px; }
+.btn-secondary:hover { background: var(--bg); color: var(--ink); }
 
 .icon-btn {
   border: 1px solid var(--line);

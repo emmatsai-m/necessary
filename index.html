@@ -8,8 +8,8 @@
 </head>
 <body>
 
-<!-- 房間代碼進入畫面：兩人輸入同一組代碼，就會看到同一份資料 -->
-<div id="room-gate" class="room-gate">
+<!-- 登入畫面：以信箱＋密碼登入，兩人共用同一組帳號即可看到同一份資料 -->
+<div id="auth-gate" class="room-gate">
   <div class="room-gate-card panel">
     <svg width="46" height="58" viewBox="0 0 70 90" fill="none" aria-hidden="true" style="margin-bottom:6px">
       <path d="M35 88 C 33 60, 30 45, 34 22" stroke="#7C8B5D" stroke-width="3" stroke-linecap="round" fill="none"/>
@@ -17,16 +17,21 @@
       <path d="M35 60 C 45 57, 51 64, 56 56" stroke="#7C8B5D" stroke-width="2.5" stroke-linecap="round" fill="none"/>
       <path d="M34 24 C 20 26, 18 10, 30 4 C 33 11, 34 15, 34 15 C 34 15, 36 11, 40 4 C 52 10, 50 26, 34 24 Z" fill="#C97B82" stroke="#A85963" stroke-width="1.4" stroke-linejoin="round"/>
     </svg>
-    <h2 class="hand" style="font-size:24px;margin:0 0 6px">輸入房間代碼</h2>
-    <p class="muted" style="margin-bottom:14px">跟另一位共同維護的人約定同一組代碼，兩人就會同步看到一樣的紀錄。第一次輸入會自動建立新房間，之後回來輸入同一組代碼即可繼續使用。</p>
-    <form id="room-gate-form">
+    <h2 class="hand" style="font-size:24px;margin:0 0 6px">登入</h2>
+    <p class="muted" style="margin-bottom:14px">跟另一位共同維護的人使用同一組信箱與密碼登入，就會同步看到一樣的紀錄。第一次使用請按「註冊新帳號」建立這組帳號。</p>
+    <form id="auth-gate-form">
       <div class="field">
-        <label class="field-label">房間代碼</label>
-        <input type="text" id="room-code-input" placeholder="例如：cozy-kitchen-42" autocomplete="off" required />
+        <label class="field-label">電子信箱</label>
+        <input type="email" id="auth-email-input" placeholder="example@mail.com" autocomplete="username" required />
       </div>
-      <button type="submit" class="btn btn-primary">進入</button>
+      <div class="field">
+        <label class="field-label">密碼</label>
+        <input type="password" id="auth-password-input" placeholder="至少 6 碼" autocomplete="current-password" required />
+      </div>
+      <button type="submit" class="btn btn-primary" id="login-btn">登入</button>
+      <button type="button" class="btn btn-secondary" id="signup-btn">註冊新帳號</button>
     </form>
-    <p id="room-gate-error" class="room-gate-error" hidden>請輸入房間代碼</p>
+    <p id="auth-gate-error" class="room-gate-error" hidden></p>
   </div>
 </div>
 
@@ -53,8 +58,8 @@
       </div>
 
       <div class="room-status">
-        房間代碼：<span id="room-badge" class="mono"></span>
-        <button type="button" id="leave-room-btn" class="room-switch-btn">切換房間</button>
+        已登入：<span id="user-badge" class="mono"></span>
+        <button type="button" id="logout-btn" class="room-switch-btn">登出</button>
       </div>
 
       <nav class="tabs-row">
@@ -182,6 +187,7 @@
 
 <!-- Firebase（不需下載安裝，直接透過 CDN 載入） -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
 <script src="app.js"></script>

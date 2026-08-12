@@ -6,14 +6,13 @@
 const CATEGORIES = ["清潔用品", "生活用品", "美妝保養", "醫療保健"];
 const BASE_UNITS = ["ml", "L", "g", "kg", "片", "顆", "錠", "個", "其他"];
 const PACK_UNITS = ["罐", "瓶", "包", "條", "盒", "箱", "組", "個", "其他"];
-const ROOM_STORAGE_KEY = "household-inventory-room-code";
 
 // ---- Firebase 初始化 ----
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+const auth = firebase.auth();
 
-// 房間代碼與對應的資料集合，進入房間後才會設定
-let currentRoomCode = null;
+// 登入後才會設定，指向該帳號底下的資料集合
 let purchasesRef = null;
 let unsubscribeSnapshot = null;
 
@@ -82,45 +81,77 @@ document.addEventListener("DOMContentLoaded", () => {
   setupTabs();
   setupForm();
   setupFilters();
-  setupRoomGate();
+  setupAuthGate();
 });
 
-// ---- 房間代碼進入流程 ----
-function setupRoomGate() {
-  const gateForm = document.getElementById("room-gate-form");
-  const codeInput = document.getElementById("room-code-input");
-  const errorMsg = document.getElementById("room-gate-error");
+// ---- 登入流程（信箱＋密碼） ----
+function setupAuthGate() {
+  const form = document.getElementById("auth-gate-form");
+  const emailInput = document.getElementById("auth-email-input");
+  const passwordInput = document.getElementById("auth-password-input");
+  const errorMsg = document.getElementById("auth-gate-error");
+  const loginBtn = document.getElementById("login-btn");
+  const signupBtn = document.getElementById("signup-btn");
 
-  gateForm.addEventListener("submit", (e) => {
-    e.preventDefault();
-    const code = codeInput.value.trim();
-    if (!code) {
-      errorMsg.hidden = false;
-      return;
-    }
-    errorMsg.hidden = true;
-    enterRoom(code);
-  });
-
-  document.getElementById("leave-room-btn").addEventListener("click", () => {
-    if (!confirm("確定要切換房間嗎？切換後需要重新輸入房間代碼才能看到目前這份資料。")) return;
-    localStorage.removeItem(ROOM_STORAGE_KEY);
-    location.reload();
-  });
-
-  const savedCode = localStorage.getItem(ROOM_STORAGE_KEY);
-  if (savedCode) {
-    enterRoom(savedCode);
+  function showError(err) {
+    const map = {
+      "auth/invalid-email": "信箱格式不正確。",
+      "auth/user-not-found": "找不到這個帳號，請確認信箱或先按「註冊新帳號」。",
+      "auth/wrong-password": "密碼不正確。",
+      "auth/invalid-credential": "信箱或密碼不正確。",
+      "auth/email-already-in-use": "這個信箱已經註冊過了，請直接登入。",
+      "auth/weak-password": "密碼至少需要 6 碼。",
+    };
+    errorMsg.textContent = map[err.code] || `發生錯誤：${err.message}`;
+    errorMsg.hidden = false;
   }
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    errorMsg.hidden = true;
+    loginBtn.disabled = true;
+    try {
+      await auth.signInWithEmailAndPassword(emailInput.value.trim(), passwordInput.value);
+    } catch (err) {
+      showError(err);
+    } finally {
+      loginBtn.disabled = false;
+    }
+  });
+
+  signupBtn.addEventListener("click", async () => {
+    errorMsg.hidden = true;
+    signupBtn.disabled = true;
+    try {
+      await auth.createUserWithEmailAndPassword(emailInput.value.trim(), passwordInput.value);
+    } catch (err) {
+      showError(err);
+    } finally {
+      signupBtn.disabled = false;
+    }
+  });
+
+  document.getElementById("logout-btn").addEventListener("click", () => {
+    if (!confirm("確定要登出嗎？")) return;
+    auth.signOut();
+  });
+
+  auth.onAuthStateChanged((user) => {
+    if (user) {
+      enterApp(user);
+    } else {
+      if (unsubscribeSnapshot) unsubscribeSnapshot();
+      purchasesRef = null;
+      document.getElementById("auth-gate").style.display = "flex";
+      document.getElementById("app-root").hidden = true;
+    }
+  });
 }
 
-function enterRoom(code) {
-  currentRoomCode = code;
-  localStorage.setItem(ROOM_STORAGE_KEY, code);
-  purchasesRef = db.collection("rooms").doc(code).collection("purchases");
-
-  document.getElementById("room-badge").textContent = code;
-  document.getElementById("room-gate").style.display = "none";
+function enterApp(user) {
+  purchasesRef = db.collection("users").doc(user.uid).collection("purchases");
+  document.getElementById("user-badge").textContent = user.email;
+  document.getElementById("auth-gate").style.display = "none";
   document.getElementById("app-root").hidden = false;
 
   if (unsubscribeSnapshot) unsubscribeSnapshot();
@@ -151,7 +182,7 @@ function subscribeToFirestore() {
     (err) => {
       console.error("Firestore 讀取失敗：", err);
       document.getElementById("recent-list").innerHTML =
-        `<div class="empty-state"><p>資料庫連線失敗，請確認 firebase-config.js 是否已填入正確設定，以及 Firestore 安全性規則是否允許存取 rooms/${escapeHtml(currentRoomCode)}/purchases。</p></div>`;
+        `<div class="empty-state"><p>資料庫連線失敗，請確認 firebase-config.js 是否已填入正確設定，以及 Firestore 安全性規則是否允許存取 users/{你的帳號}/purchases。</p></div>`;
     }
   );
 }
