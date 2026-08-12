@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>生活用品採購庫存記錄</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- 房間代碼進入畫面：兩人輸入同一組代碼，就會看到同一份資料 -->
+<div id="room-gate" class="room-gate">
+  <div class="room-gate-card panel">
+    <svg width="46" height="58" viewBox="0 0 70 90" fill="none" aria-hidden="true" style="margin-bottom:6px">
+      <path d="M35 88 C 33 60, 30 45, 34 22" stroke="#7C8B5D" stroke-width="3" stroke-linecap="round" fill="none"/>
+      <path d="M34 55 C 24 52, 18 58, 14 50" stroke="#7C8B5D" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+      <path d="M35 60 C 45 57, 51 64, 56 56" stroke="#7C8B5D" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+      <path d="M34 24 C 20 26, 18 10, 30 4 C 33 11, 34 15, 34 15 C 34 15, 36 11, 40 4 C 52 10, 50 26, 34 24 Z" fill="#C97B82" stroke="#A85963" stroke-width="1.4" stroke-linejoin="round"/>
+    </svg>
+    <h2 class="hand" style="font-size:24px;margin:0 0 6px">輸入房間代碼</h2>
+    <p class="muted" style="margin-bottom:14px">跟另一位共同維護的人約定同一組代碼，兩人就會同步看到一樣的紀錄。第一次輸入會自動建立新房間，之後回來輸入同一組代碼即可繼續使用。</p>
+    <form id="room-gate-form">
+      <div class="field">
+        <label class="field-label">房間代碼</label>
+        <input type="text" id="room-code-input" placeholder="例如：cozy-kitchen-42" autocomplete="off" required />
+      </div>
+      <button type="submit" class="btn btn-primary">進入</button>
+    </form>
+    <p id="room-gate-error" class="room-gate-error" hidden>請輸入房間代碼</p>
+  </div>
+</div>
+
+<div class="app-root" id="app-root" hidden>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <!-- 手繪鬱金香裝飾 -->
+      <svg class="doodle-corner" width="58" height="72" viewBox="0 0 70 90" fill="none" aria-hidden="true">
+        <path d="M35 88 C 33 60, 30 45, 34 22" stroke="#7C8B5D" stroke-width="3" stroke-linecap="round" fill="none"/>
+        <path d="M34 55 C 24 52, 18 58, 14 50" stroke="#7C8B5D" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+        <path d="M35 60 C 45 57, 51 64, 56 56" stroke="#7C8B5D" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+        <path d="M34 24 C 20 26, 18 10, 30 4 C 33 11, 34 15, 34 15 C 34 15, 36 11, 40 4 C 52 10, 50 26, 34 24 Z" fill="#C97B82" stroke="#A85963" stroke-width="1.4" stroke-linejoin="round"/>
+      </svg>
+
+      <div class="brand-row">
+        <div class="brand-badge">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFDF6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
+        </div>
+        <div>
+          <h1 class="hand brand-title">生活用品採購庫存記錄</h1>
+          <p class="brand-sub">共同維護 · 家庭補給清單</p>
+        </div>
+      </div>
+
+      <div class="room-status">
+        房間代碼：<span id="room-badge" class="mono"></span>
+        <button type="button" id="leave-room-btn" class="room-switch-btn">切換房間</button>
+      </div>
+
+      <nav class="tabs-row">
+        <button class="tab-btn active" data-tab="input" type="button">📋 新增紀錄</button>
+        <button class="tab-btn" data-tab="inventory" type="button">📦 庫存總覽</button>
+        <button class="tab-btn" data-tab="value" type="button">🏷️ 性價比比較</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <!-- 新增紀錄頁 -->
+    <section id="tab-input" class="tab-panel">
+      <div class="input-layout">
+        <form id="purchase-form" class="input-form-panel panel">
+          <div class="panel-head">
+            <h2 class="hand" id="form-title">新增採購紀錄</h2>
+            <button type="button" id="cancel-edit-btn" class="icon-btn" style="display:none" aria-label="取消編輯">✕</button>
+          </div>
+
+          <div class="field">
+            <label class="field-label">品名</label>
+            <input type="text" id="f-name" placeholder="例如：洗碗精" required />
+          </div>
+
+          <div class="field">
+            <label class="field-label">分類</label>
+            <select id="f-category"></select>
+          </div>
+
+          <div class="spec-box">
+            <p class="spec-label">🌿 計價最小單位（用於算性價比）</p>
+            <div class="two-col">
+              <div class="field">
+                <label class="field-label">單一包裝內容量</label>
+                <input type="number" step="any" min="0" id="f-packSize" placeholder="例如 800" required />
+              </div>
+              <div class="field">
+                <label class="field-label">最小單位</label>
+                <select id="f-baseUnit"></select>
+              </div>
+            </div>
+            <div class="field" id="f-customBaseUnit-wrap" style="display:none">
+              <label class="field-label">自訂最小單位</label>
+              <input type="text" id="f-customBaseUnit" placeholder="例如：張" />
+            </div>
+
+            <p class="spec-label" style="margin-top:10px">🌷 實際採購單位（買了幾罐/幾包）</p>
+            <div class="two-col">
+              <div class="field">
+                <label class="field-label">採購數量</label>
+                <input type="number" step="any" min="0" id="f-packQty" placeholder="例如 1" required />
+              </div>
+              <div class="field">
+                <label class="field-label">採購單位</label>
+                <select id="f-packUnit"></select>
+              </div>
+            </div>
+            <div class="field" id="f-customPackUnit-wrap" style="display:none">
+              <label class="field-label">自訂採購單位</label>
+              <input type="text" id="f-customPackUnit" placeholder="例如：袋" />
+            </div>
+
+            <div class="mono spec-preview" id="spec-preview">= 共 0</div>
+          </div>
+
+          <div class="field">
+            <label class="field-label">購買日期</label>
+            <input type="date" id="f-purchaseDate" />
+          </div>
+
+          <div class="two-col">
+            <div class="field">
+              <label class="field-label">金額（選填）</label>
+              <input type="number" step="any" min="0" id="f-price" placeholder="NT$" />
+            </div>
+            <div class="field">
+              <label class="field-label">採購人（選填）</label>
+              <input type="text" id="f-purchaser" placeholder="姓名" />
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label">備註（選填）</label>
+            <textarea id="f-note" rows="2" placeholder="例如：特價、規格說明"></textarea>
+          </div>
+
+          <button type="submit" class="btn btn-primary" id="submit-btn">➕ 新增紀錄</button>
+        </form>
+
+        <div>
+          <p class="muted" id="recent-caption">最近輸入的 3 筆紀錄</p>
+          <div id="recent-list" class="record-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 庫存總覽頁 -->
+    <section id="tab-inventory" class="tab-panel" hidden>
+      <div class="filter-row">
+        <div class="search-wrap">
+          <span class="icon">🔍</span>
+          <input type="text" id="inv-search" placeholder="搜尋品名" />
+        </div>
+        <select id="inv-category-filter"></select>
+      </div>
+      <div id="inventory-grid" class="inv-grid"></div>
+    </section>
+
+    <!-- 性價比比較頁 -->
+    <section id="tab-value" class="tab-panel" hidden>
+      <div class="filter-row">
+        <div class="search-wrap">
+          <span class="icon">🔍</span>
+          <input type="text" id="val-search" placeholder="搜尋品名" />
+        </div>
+        <select id="val-category-filter"></select>
+      </div>
+      <div id="value-list" class="value-list"></div>
+    </section>
+
+  </main>
+</div>
+
+<!-- Firebase（不需下載安裝，直接透過 CDN 載入） -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

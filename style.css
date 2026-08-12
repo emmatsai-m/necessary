@@ -1,0 +1,260 @@
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Nunito:wght@400;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap');
+
+:root {
+  --bg: #F6F1E4;
+  --panel: #FFFDF6;
+  --ink: #3A3226;
+  --ink-soft: #8A7F68;
+  --delft: #3F6E8C;
+  --delft-deep: #2C4F65;
+  --terracotta: #C1694F;
+  --terracotta-deep: #9C4E39;
+  --sage: #7C8B5D;
+  --sage-deep: #5C6B44;
+  --mustard: #D6A23C;
+  --rose: #C97B82;
+  --rose-deep: #A85963;
+  --line: #E3D9C0;
+  --wood: #B98C55;
+  --wood-deep: #8B6239;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; width: 100%; overflow-x: hidden; }
+body {
+  font-family: 'Nunito', 'Noto Sans TC', sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  min-height: 100vh;
+}
+
+.hand { font-family: 'Caveat', 'Noto Sans TC', cursive; font-weight: 700; letter-spacing: 0.01em; }
+.mono { font-family: 'IBM Plex Mono', monospace; }
+
+input, select, textarea, button { font-family: inherit; }
+input, select, textarea {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 16px; /* 避免手機輸入自動縮放 */
+  color: var(--ink);
+  width: 100%;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--delft);
+  box-shadow: 0 0 0 3px rgba(63, 110, 140, 0.15);
+}
+label.field-label {
+  display: block;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  margin-bottom: 4px;
+  font-weight: 700;
+}
+.field { margin-bottom: 10px; }
+
+.btn {
+  cursor: pointer;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  font-size: 15px;
+  font-weight: 700;
+  padding: 11px 16px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: transform 0.1s ease, background 0.15s ease;
+}
+.btn:active { transform: scale(0.97); }
+.btn-primary { background: var(--delft); color: var(--panel); width: 100%; }
+.btn-primary:hover { background: var(--delft-deep); }
+
+.icon-btn {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 8px;
+  min-width: 36px;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--ink-soft);
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+.icon-btn:hover { background: var(--bg); color: var(--ink); }
+.icon-btn-sm { min-width: 30px; min-height: 30px; }
+.icon-btn-danger { color: var(--terracotta-deep); border-color: var(--terracotta); }
+.icon-btn-danger:hover { background: #F6E9E7; }
+
+.tag-pill {
+  font-size: 11.5px;
+  font-weight: 800;
+  padding: 2px 10px;
+  border-radius: 20px;
+  display: inline-block;
+}
+/* 四大分類配色 */
+.cat-清潔用品 { background: #E4EDF1; color: #2C4F65; }
+.cat-生活用品 { background: #EAEDE1; color: #4B5636; }
+.cat-美妝保養 { background: #F5E7E7; color: #7A4348; }
+.cat-醫療保健 { background: #F3E3DD; color: #7A3C2B; }
+.cat-其他 { background: #EDEAE0; color: #5C5646; }
+
+.cat-bar-清潔用品 { background: #3F6E8C; }
+.cat-bar-生活用品 { background: #7C8B5D; }
+.cat-bar-美妝保養 { background: #C97B82; }
+.cat-bar-醫療保健 { background: #C1694F; }
+.cat-bar-其他 { background: #9A9178; }
+
+/* 房間代碼進入畫面 */
+.room-gate {
+  position: fixed; inset: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg);
+  padding: 20px;
+}
+.room-gate-card {
+  max-width: 380px; width: 100%; text-align: center;
+}
+.room-gate-card .field { text-align: left; }
+.room-gate-error { color: var(--terracotta-deep); font-size: 13px; margin-top: 10px; font-weight: 700; }
+
+/* 房間狀態列（頁首） */
+.room-status {
+  font-size: 12.5px; color: var(--ink-soft); font-weight: 600;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.room-status .mono { color: var(--delft-deep); font-weight: 700; }
+.room-switch-btn {
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink-soft);
+  border-radius: 20px; font-size: 11.5px; font-weight: 700; padding: 3px 10px; cursor: pointer;
+}
+.room-switch-btn:hover { background: var(--bg); color: var(--ink); }
+
+/* Header */
+.site-header {
+  border-bottom: 1px solid var(--line);
+  background:
+    linear-gradient(rgba(255,253,246,0.92), rgba(255,253,246,0.92)),
+    repeating-linear-gradient(97deg, #C9A874 0px, #B98C55 3px, #D8BD8E 6px, #BE9760 9px, #CBA976 12px);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.header-inner {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 16px 22px 0;
+  position: relative;
+}
+.doodle-corner { position: absolute; right: 18px; top: 4px; opacity: 0.9; }
+@media (max-width: 560px) { .doodle-corner { display: none; } }
+
+.brand-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.brand-badge {
+  width: 38px; height: 38px; border-radius: 9px;
+  background: linear-gradient(160deg, var(--wood), var(--wood-deep));
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  box-shadow: inset 0 -2px 0 rgba(0,0,0,0.15);
+}
+.brand-title { font-size: 26px; margin: 0; line-height: 1.1; color: var(--ink); }
+.brand-sub { font-size: 12px; color: var(--ink-soft); margin: 2px 0 0; font-weight: 600; }
+
+.tabs-row { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+.tabs-row::-webkit-scrollbar { display: none; }
+.tab-btn {
+  border: none; background: transparent; padding: 10px 16px; font-size: 15px; font-weight: 800;
+  cursor: pointer; display: flex; align-items: center; gap: 6px; white-space: nowrap;
+  color: var(--ink-soft); border-bottom: 3px solid transparent;
+}
+.tab-btn.active { color: var(--delft); border-bottom-color: var(--delft); }
+
+.container { max-width: 1080px; margin: 0 auto; padding: 22px; }
+@media (max-width: 640px) { .container { padding: 14px; } .header-inner { padding: 12px 14px 0; } }
+
+.tab-panel[hidden] { display: none; }
+
+/* 新增紀錄頁 */
+.input-layout { display: grid; grid-template-columns: 340px 1fr; gap: 20px; }
+.input-form-panel { position: sticky; top: 128px; align-self: start; }
+@media (max-width: 860px) {
+  .input-layout { grid-template-columns: 1fr; }
+  .input-form-panel { position: static; top: auto; }
+}
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 480px) { .two-col { grid-template-columns: 1fr; } }
+
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px 18px 20px; }
+.panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.panel-head h2 { font-size: 21px; margin: 0; color: var(--ink); }
+
+.spec-box { background: #FBF6EA; border: 1.5px dashed #C9D1B5; border-radius: 10px; padding: 10px 10px 4px; margin-bottom: 10px; }
+.spec-box p.spec-label { font-size: 11.5px; color: var(--sage-deep); margin: 0 0 8px; font-weight: 800; }
+.spec-preview { font-size: 12.5px; color: var(--delft-deep); padding: 6px 2px 10px; font-weight: 600; }
+
+.muted { font-size: 13px; color: var(--ink-soft); margin: 0 0 10px; font-weight: 600; }
+
+.record-list { display: flex; flex-direction: column; gap: 8px; }
+.record-row {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px;
+}
+.record-row.editing { background: #E7EEF2; border-color: var(--delft); }
+.record-bar { width: 6px; align-self: stretch; border-radius: 4px; min-height: 36px; }
+.record-main { flex: 1 1 180px; min-width: 0; }
+.record-title-row { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.record-title-row .name { font-weight: 800; font-size: 15px; }
+.record-sub { font-size: 12px; color: var(--ink-soft); margin-top: 3px; }
+.record-qty { font-size: 17px; font-weight: 700; white-space: nowrap; }
+.record-qty .unit { font-size: 12px; color: var(--ink-soft); font-weight: 400; }
+.record-actions { display: flex; gap: 6px; }
+
+.empty-state { text-align: center; padding: 40px 0; }
+.empty-state p { color: var(--ink-soft); font-size: 14px; margin-top: 10px; }
+
+/* 篩選列 */
+.filter-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+.search-wrap { position: relative; flex: 1 1 220px; }
+.search-wrap input { padding-left: 34px; }
+.search-wrap .icon { position: absolute; left: 12px; top: 13px; color: var(--ink-soft); }
+.filter-row select { width: 150px; flex: 0 1 150px; }
+
+/* 庫存總覽頁 */
+.inv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
+.inv-card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.inv-card-head { padding: 14px 16px 12px; }
+.inv-card-head.expanded { border-bottom: 1px dashed var(--line); }
+.inv-card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.inv-card-name { font-size: 21px; margin: 8px 0 0; color: var(--ink); }
+.inv-toggle { border: 1px solid var(--line); border-radius: 8px; font-size: 11px; padding: 5px 9px; cursor: pointer; background: transparent; color: var(--ink-soft); flex-shrink: 0; font-weight: 700; }
+.inv-total { display: flex; align-items: baseline; gap: 6px; margin-top: 12px; }
+.inv-total .num { font-size: 28px; font-weight: 700; }
+.inv-total .unit { font-size: 13px; color: var(--ink-soft); }
+.inv-last { font-size: 12px; color: var(--ink-soft); margin-top: 6px; }
+.inv-detail { padding: 10px 16px 14px; display: flex; flex-direction: column; gap: 8px; background: var(--bg); }
+.inv-detail-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; flex-wrap: wrap; }
+.inv-detail-row .date { color: var(--ink-soft); }
+.inv-detail-row .qty { font-weight: 700; }
+.inv-detail-row .who { color: var(--ink-soft); flex: 1 1 100px; }
+
+/* 性價比比較頁 */
+.value-list { display: flex; flex-direction: column; gap: 14px; }
+.value-card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.value-card-head { padding: 12px 16px; border-bottom: 1px dashed var(--line); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.value-card-head h3 { font-size: 19px; margin: 0; color: var(--ink); }
+.value-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 16px; border-top: 1px solid #EDEAE0; }
+.value-row:first-child { border-top: none; }
+.value-row.best { background: #EDF2E7; }
+.value-row .date { font-size: 12px; color: var(--ink-soft); }
+.value-row .pack { font-size: 13px; }
+.value-row .price { font-size: 13px; color: var(--ink-soft); }
+.value-row .unit-price { font-size: 16px; font-weight: 700; flex: 1 1 120px; }
+.value-row .best-badge { display: inline-flex; align-items: center; gap: 4px; background: #FBF0D9; color: #8A6416; }
