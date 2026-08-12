@@ -91,15 +91,13 @@ function setupAuthGate() {
   const passwordInput = document.getElementById("auth-password-input");
   const errorMsg = document.getElementById("auth-gate-error");
   const loginBtn = document.getElementById("login-btn");
-  const signupBtn = document.getElementById("signup-btn");
 
   function showError(err) {
     const map = {
       "auth/invalid-email": "信箱格式不正確。",
-      "auth/user-not-found": "找不到這個帳號，請確認信箱或先按「註冊新帳號」。",
+      "auth/user-not-found": "找不到這個帳號，請確認信箱是否正確，或聯絡管理者確認帳號是否已建立。",
       "auth/wrong-password": "密碼不正確。",
       "auth/invalid-credential": "信箱或密碼不正確。",
-      "auth/email-already-in-use": "這個信箱已經註冊過了，請直接登入。",
       "auth/weak-password": "密碼至少需要 6 碼。",
     };
     errorMsg.textContent = map[err.code] || `發生錯誤：${err.message}`;
@@ -116,18 +114,6 @@ function setupAuthGate() {
       showError(err);
     } finally {
       loginBtn.disabled = false;
-    }
-  });
-
-  signupBtn.addEventListener("click", async () => {
-    errorMsg.hidden = true;
-    signupBtn.disabled = true;
-    try {
-      await auth.createUserWithEmailAndPassword(emailInput.value.trim(), passwordInput.value);
-    } catch (err) {
-      showError(err);
-    } finally {
-      signupBtn.disabled = false;
     }
   });
 
