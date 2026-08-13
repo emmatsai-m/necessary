@@ -199,13 +199,22 @@
     </div>
     <p class="usage-current" id="usage-current-stock"></p>
 
+    <div class="field" id="usage-mode-wrap" hidden>
+      <label class="field-label">使用單位</label>
+      <div class="mode-toggle">
+        <button type="button" class="mode-toggle-btn" id="usage-mode-pack" data-mode="pack"></button>
+        <button type="button" class="mode-toggle-btn" id="usage-mode-base" data-mode="base"></button>
+      </div>
+    </div>
+
     <div class="field">
-      <label class="field-label">使用數量</label>
+      <label class="field-label" id="usage-qty-label">使用數量</label>
       <div class="stepper">
         <button type="button" class="stepper-btn" id="usage-minus" aria-label="減少">−</button>
         <input type="number" id="usage-qty" min="1" step="1" value="1" inputmode="numeric" />
         <button type="button" class="stepper-btn" id="usage-plus" aria-label="增加">＋</button>
       </div>
+      <p class="usage-convert-hint" id="usage-convert-hint"></p>
     </div>
     <div class="field">
       <label class="field-label">使用日期</label>

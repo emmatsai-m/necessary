@@ -238,6 +238,9 @@ function maybeBackfillTransactions() {
       category: r.category,
       type: "purchase",
       quantity: totalBase(r),
+      packQty: r.packQty,
+      packUnit: r.packUnit,
+      packSize: r.packSize,
       date: r.purchaseDate,
       note: "（系統自動補建，對應既有採購紀錄）",
       sourcePurchaseId: r.id,
@@ -294,6 +297,9 @@ function setupForm() {
             baseUnit: payload.baseUnit,
             category: payload.category,
             quantity: txQuantity,
+            packQty: payload.packQty,
+            packUnit: payload.packUnit,
+            packSize: payload.packSize,
             date: payload.purchaseDate,
           });
         } else {
@@ -304,6 +310,9 @@ function setupForm() {
             category: payload.category,
             type: "purchase",
             quantity: txQuantity,
+            packQty: payload.packQty,
+            packUnit: payload.packUnit,
+            packSize: payload.packSize,
             date: payload.purchaseDate,
             note: "",
             sourcePurchaseId: state.editingId,
@@ -323,6 +332,9 @@ function setupForm() {
           category: payload.category,
           type: "purchase",
           quantity: txQuantity,
+          packQty: payload.packQty,
+          packUnit: payload.packUnit,
+          packSize: payload.packSize,
           date: payload.purchaseDate,
           note: "",
           sourcePurchaseId: docRef.id,
@@ -615,8 +627,28 @@ function computeInventoryList() {
     let status = "ok";
     if (g.current <= 0) status = "out";
     else if (g.current <= minimumStock) status = "low";
-    return { ...g, minimumStock, status };
+    const packSpec = getLatestPackSpec(g.key);
+    return { ...g, minimumStock, status, packSpec };
   });
+}
+
+// 取得該品項「最近一次採購」的包裝規格（例如 700ml/罐），供使用庫存時換算成罐數
+function getLatestPackSpec(key) {
+  const purchaseTxs = state.transactions.filter((t) => t.productId === key && t.type === "purchase");
+  if (purchaseTxs.length === 0) return null;
+  purchaseTxs.sort((a, b) => (a.date < b.date ? 1 : -1));
+  const latest = purchaseTxs[0];
+  if (latest.packSize && latest.packUnit) {
+    return { packSize: Number(latest.packSize), packUnit: latest.packUnit };
+  }
+  // 舊資料的異動紀錄還沒有包裝規格欄位，退而求其次去對應的採購紀錄找
+  if (latest.sourcePurchaseId) {
+    const record = state.records.find((r) => r.id === latest.sourcePurchaseId);
+    if (record && record.packSize && record.packUnit) {
+      return { packSize: Number(record.packSize), packUnit: record.packUnit };
+    }
+  }
+  return null;
 }
 
 function filterInventoryList(list) {
@@ -662,6 +694,10 @@ function renderInventory() {
   container.innerHTML = list.map((g) => {
     const cat = catClass(g.category);
     const statusLabel = g.status === "out" ? "🔴 缺貨" : g.status === "low" ? "🟡 庫存偏低" : "🟢 有庫存";
+    const ps = g.packSpec;
+    const approxCurrent = ps ? `<span class="approx-pack">約 ${fmtNum(g.current / ps.packSize, 1)} ${escapeHtml(ps.packUnit)}</span>` : "";
+    const approxPurchased = ps ? ` (${fmtNum(g.purchased / ps.packSize, 1)}${escapeHtml(ps.packUnit)})` : "";
+    const approxUsed = ps ? ` (${fmtNum(g.used / ps.packSize, 1)}${escapeHtml(ps.packUnit)})` : "";
     return `
       <div class="inv-card">
         <div class="inv-card-head">
@@ -676,11 +712,12 @@ function renderInventory() {
           <div class="inv-current-row">
             <span class="num mono">${fmtNum(g.current)}</span>
             <span class="unit">${escapeHtml(g.unit)} 現有庫存</span>
+            ${approxCurrent}
           </div>
 
           <div class="inv-stock-rows">
-            <div class="inv-stock-row"><span>累計購入</span><span class="val">${fmtNum(g.purchased)} ${escapeHtml(g.unit)}</span></div>
-            <div class="inv-stock-row"><span>已使用</span><span class="val">${fmtNum(g.used)} ${escapeHtml(g.unit)}</span></div>
+            <div class="inv-stock-row"><span>累計購入</span><span class="val">${fmtNum(g.purchased)} ${escapeHtml(g.unit)}${approxPurchased}</span></div>
+            <div class="inv-stock-row"><span>已使用</span><span class="val">${fmtNum(g.used)} ${escapeHtml(g.unit)}${approxUsed}</span></div>
           </div>
 
           <div class="inv-dates">
@@ -727,6 +764,9 @@ function editLatestPurchase(key) {
 }
 
 // ---- 使用庫存 Modal ----
+let usageMode = "pack"; // "pack"（以罐/瓶等採購單位計）| "base"（以最小單位計）
+let usagePackSpec = null;
+
 function openUsageModal(key) {
   const g = computeInventoryMap().get(key);
   if (!g) return;
@@ -735,21 +775,77 @@ function openUsageModal(key) {
     return;
   }
   state.usageModalKey = key;
+  usagePackSpec = getLatestPackSpec(key);
+  usageMode = usagePackSpec ? "pack" : "base";
+
   document.getElementById("usage-modal-title").textContent = `使用庫存：${g.name}`;
-  document.getElementById("usage-current-stock").textContent = `目前庫存：${fmtNum(g.current)} ${g.unit}`;
-  const qtyInput = document.getElementById("usage-qty");
-  qtyInput.value = 1;
-  qtyInput.max = g.current;
-  qtyInput.min = 1;
+  renderUsageStockLine(g);
+  setupUsageModeButtons(g);
+  applyUsageMode(g);
+
   document.getElementById("usage-date").value = todayStr();
   document.getElementById("usage-note").value = "";
   document.getElementById("usage-error").hidden = true;
   document.getElementById("usage-modal").hidden = false;
 }
+
 function closeUsageModal() {
   document.getElementById("usage-modal").hidden = true;
   state.usageModalKey = null;
+  usagePackSpec = null;
 }
+
+function renderUsageStockLine(g) {
+  let text = `目前庫存：${fmtNum(g.current)} ${g.unit}`;
+  if (usagePackSpec && usagePackSpec.packSize > 0) {
+    text += `（約 ${fmtNum(g.current / usagePackSpec.packSize, 1)} ${usagePackSpec.packUnit}）`;
+  }
+  document.getElementById("usage-current-stock").textContent = text;
+}
+
+function setupUsageModeButtons(g) {
+  const wrap = document.getElementById("usage-mode-wrap");
+  const packBtn = document.getElementById("usage-mode-pack");
+  const baseBtn = document.getElementById("usage-mode-base");
+  if (!usagePackSpec) {
+    wrap.hidden = true;
+    return;
+  }
+  wrap.hidden = false;
+  packBtn.textContent = `以${usagePackSpec.packUnit}計（1${usagePackSpec.packUnit}=${fmtNum(usagePackSpec.packSize)}${g.unit}）`;
+  baseBtn.textContent = `以${g.unit}計（精確）`;
+  packBtn.classList.toggle("active", usageMode === "pack");
+  baseBtn.classList.toggle("active", usageMode === "base");
+}
+
+function applyUsageMode(g) {
+  const qtyInput = document.getElementById("usage-qty");
+  const label = document.getElementById("usage-qty-label");
+  qtyInput.value = 1;
+  if (usageMode === "pack" && usagePackSpec) {
+    label.textContent = `使用數量（${usagePackSpec.packUnit}）`;
+    const maxPacks = Math.floor(g.current / usagePackSpec.packSize + 1e-9);
+    qtyInput.min = 1;
+    qtyInput.max = Math.max(maxPacks, 0);
+  } else {
+    label.textContent = `使用數量（${g.unit}）`;
+    qtyInput.min = 1;
+    qtyInput.max = g.current;
+  }
+  updateUsageHint(g);
+}
+
+function updateUsageHint(g) {
+  const hint = document.getElementById("usage-convert-hint");
+  const qtyInput = document.getElementById("usage-qty");
+  if (usageMode === "pack" && usagePackSpec) {
+    const qty = Number(qtyInput.value) || 0;
+    hint.textContent = `＝ ${fmtNum(qty * usagePackSpec.packSize)} ${g.unit}`;
+  } else {
+    hint.textContent = "";
+  }
+}
+
 async function confirmUsage() {
   const key = state.usageModalKey;
   if (!key) return;
@@ -757,14 +853,24 @@ async function confirmUsage() {
   const errorMsg = document.getElementById("usage-error");
   if (!g) { closeUsageModal(); return; }
 
-  const qty = Number(document.getElementById("usage-qty").value);
-  if (!Number.isFinite(qty) || qty < 1) {
+  const enteredQty = Number(document.getElementById("usage-qty").value);
+  if (!Number.isFinite(enteredQty) || enteredQty < 1) {
     errorMsg.textContent = "使用數量不能小於 1。";
     errorMsg.hidden = false;
     return;
   }
-  if (qty > g.current) {
-    errorMsg.textContent = `使用數量不能大於目前庫存（${fmtNum(g.current)} ${g.unit}）。`;
+
+  let baseQty = enteredQty;
+  let packInfo = null;
+  if (usageMode === "pack" && usagePackSpec) {
+    baseQty = enteredQty * usagePackSpec.packSize;
+    packInfo = { packQty: enteredQty, packUnit: usagePackSpec.packUnit, packSize: usagePackSpec.packSize };
+  }
+
+  if (baseQty > g.current + 1e-9) {
+    errorMsg.textContent = usagePackSpec && usageMode === "pack"
+      ? `使用數量不能大於目前庫存（約 ${fmtNum(g.current / usagePackSpec.packSize, 1)} ${usagePackSpec.packUnit}）。`
+      : `使用數量不能大於目前庫存（${fmtNum(g.current)} ${g.unit}）。`;
     errorMsg.hidden = false;
     return;
   }
@@ -779,7 +885,8 @@ async function confirmUsage() {
       baseUnit: g.unit,
       category: g.category,
       type: "usage",
-      quantity: -qty,
+      quantity: -baseQty,
+      ...(packInfo ? { packQty: packInfo.packQty, packUnit: packInfo.packUnit, packSize: packInfo.packSize } : {}),
       date: document.getElementById("usage-date").value || todayStr(),
       note: document.getElementById("usage-note").value.trim(),
       sourcePurchaseId: null,
@@ -821,11 +928,18 @@ function renderDetailModal() {
     const icon = t.type === "purchase" ? "🟢" : t.type === "usage" ? "🔴" : "🟡";
     const label = t.type === "purchase" ? "採購" : t.type === "usage" ? "使用" : "調整";
     const sign = t.quantity >= 0 ? "+" : "";
+    let qtyText;
+    if (t.packQty && t.packUnit) {
+      const packSign = t.type === "usage" ? "−" : "+";
+      qtyText = `${packSign}${fmtNum(t.packQty, 0)}${escapeHtml(t.packUnit)}（${sign}${fmtNum(t.quantity)}${escapeHtml(g.unit)}）`;
+    } else {
+      qtyText = `${sign}${fmtNum(t.quantity)} ${escapeHtml(g.unit)}`;
+    }
     return `
       <div class="detail-tx-row tx-${t.type}">
         <span class="tx-date">${fmtDate(t.date)}</span>
         <span>${icon} ${label}</span>
-        <span class="tx-qty">${sign}${fmtNum(t.quantity)} ${escapeHtml(g.unit)}</span>
+        <span class="tx-qty">${qtyText}</span>
         <span class="tx-note">${escapeHtml(t.note || "")}</span>
       </div>`;
   }).join("") || `<p class="muted">尚無異動紀錄。</p>`;
@@ -846,14 +960,37 @@ function setupModals() {
   document.getElementById("usage-modal").addEventListener("click", (e) => {
     if (e.target.id === "usage-modal") closeUsageModal();
   });
+  document.getElementById("usage-mode-pack").addEventListener("click", () => {
+    if (!usagePackSpec) return;
+    usageMode = "pack";
+    const g = computeInventoryMap().get(state.usageModalKey);
+    if (!g) return;
+    setupUsageModeButtons(g);
+    applyUsageMode(g);
+  });
+  document.getElementById("usage-mode-base").addEventListener("click", () => {
+    usageMode = "base";
+    const g = computeInventoryMap().get(state.usageModalKey);
+    if (!g) return;
+    setupUsageModeButtons(g);
+    applyUsageMode(g);
+  });
   document.getElementById("usage-minus").addEventListener("click", () => {
     const input = document.getElementById("usage-qty");
     input.value = Math.max(1, (Number(input.value) || 1) - 1);
+    const g = computeInventoryMap().get(state.usageModalKey);
+    if (g) updateUsageHint(g);
   });
   document.getElementById("usage-plus").addEventListener("click", () => {
     const input = document.getElementById("usage-qty");
     const max = Number(input.max) || Infinity;
     input.value = Math.min(max, (Number(input.value) || 1) + 1);
+    const g = computeInventoryMap().get(state.usageModalKey);
+    if (g) updateUsageHint(g);
+  });
+  document.getElementById("usage-qty").addEventListener("input", () => {
+    const g = computeInventoryMap().get(state.usageModalKey);
+    if (g) updateUsageHint(g);
   });
   document.getElementById("usage-confirm").addEventListener("click", confirmUsage);
 
