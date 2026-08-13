@@ -311,6 +311,7 @@ label.field-label {
   position: fixed; inset: 0; z-index: 60; background: rgba(58, 50, 38, 0.35);
   display: flex; align-items: center; justify-content: center; padding: 16px;
 }
+.modal-overlay[hidden] { display: none; }
 .modal-card {
   max-width: 380px; width: 100%; max-height: calc(100vh - 32px); overflow-y: auto;
 }
