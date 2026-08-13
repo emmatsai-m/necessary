@@ -23,6 +23,34 @@
 
 ⚠️ 密碼請設定得複雜一點（不要用生日、手機號碼這種），因為只要有這組信箱密碼就能讀寫你們的資料。
 
+## 把程式碼公開在 GitHub 上安全嗎？
+
+安全，這是 Firebase 官方認可的常見做法。`firebase-config.js` 裡的 `apiKey` 等設定值**不是密碼**，只是告訴瀏覽器要連到哪個 Firebase 專案，本身沒有讀寫資料的權限；真正決定「誰能讀寫」的是 Firestore 的安全性規則（下面「部署前要做的事」那段的 `request.auth.uid == userId`），而不是把設定值藏起來。你們的登入密碼從頭到尾都只存在 Firebase 主控台的使用者列表裡，沒有寫進任何檔案。
+
+唯一比較次要的疑慮是：因為 `apiKey` 公開，理論上有技術能力的人可以繞過網站畫面，直接呼叫 Firebase 幫自己在你的專案下建立新帳號（雖然還是完全碰不到你們的資料，因為 UID 對不上）。想徹底堵住這條路，可以用下面「進階安全性設定」把規則再收緊一層。
+
+## 進階安全性設定（選用，建議設定）
+
+把 Firestore 規則多加一個條件，直接把你們共用帳號的 UID 寫死在規則裡，這樣就算有陌生人自己註冊了新帳號，規則也會直接擋下（因為他的 UID 永遠對不上你寫死的那組）。
+
+你的 UID 在 Firebase 主控台 → Authentication → Users 的列表裡，信箱旁邊會列出一串英數字，複製它，換掉下面的 `"你的UID"`：
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId}/purchases/{docId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId && userId == "你的UID";
+    }
+    match /users/{userId}/inventoryTransactions/{docId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId && userId == "你的UID";
+    }
+  }
+}
+```
+
+貼到 Firestore 的「規則」分頁整段覆蓋即可，不會影響既有資料；之後如果想再增加第二個帳號共用，把 `userId == "你的UID"` 那段改成 `(userId == "帳號A的UID" || userId == "帳號B的UID")` 即可。
+
 ## 部署前要做的事
 
 1. 打開 `firebase-config.js`，把裡面 6 個欄位換成你自己 Firebase 專案的設定值（Firebase 主控台 → 專案設定 → 一般 → 我的應用程式 → SDK 設定與程式碼）。
