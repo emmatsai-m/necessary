@@ -72,6 +72,8 @@ label.field-label {
 .btn:active { transform: scale(0.97); }
 .btn-primary { background: var(--delft); color: var(--panel); width: 100%; }
 .btn-primary:hover { background: var(--delft-deep); }
+.btn-ghost { background: transparent; color: var(--ink-soft); border: 1px solid var(--line); }
+.btn-ghost:hover { background: var(--bg); color: var(--ink); }
 
 .icon-btn {
   border: 1px solid var(--line);
@@ -258,3 +260,95 @@ label.field-label {
 .value-row .price { font-size: 13px; color: var(--ink-soft); }
 .value-row .unit-price { font-size: 16px; font-weight: 700; flex: 1 1 120px; }
 .value-row .best-badge { display: inline-flex; align-items: center; gap: 4px; background: #FBF0D9; color: #8A6416; }
+
+/* ===== 庫存統計列 ===== */
+.inv-stats {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px;
+}
+@media (max-width: 640px) { .inv-stats { grid-template-columns: repeat(2, 1fr); } }
+.inv-stat-card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  padding: 10px 12px; text-align: center;
+}
+.inv-stat-card .num { font-size: 22px; font-weight: 700; display: block; }
+.inv-stat-card .label { font-size: 11.5px; color: var(--ink-soft); font-weight: 700; }
+.inv-stat-card.stat-ok .num { color: var(--sage-deep); }
+.inv-stat-card.stat-low .num { color: var(--mustard); }
+.inv-stat-card.stat-out .num { color: var(--terracotta-deep); }
+
+/* ===== 狀態篩選鈕 ===== */
+.status-filter-row { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+.status-filter-btn {
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink-soft);
+  border-radius: 20px; font-size: 12.5px; font-weight: 700; padding: 6px 14px; cursor: pointer;
+}
+.status-filter-btn.active { background: var(--delft); color: var(--panel); border-color: var(--delft); }
+
+/* ===== 庫存狀態徽章 ===== */
+.status-badge { font-size: 11.5px; font-weight: 800; padding: 2px 9px; border-radius: 20px; display: inline-flex; align-items: center; gap: 3px; }
+.status-badge.status-ok { background: #EAEDE1; color: var(--sage-deep); }
+.status-badge.status-low { background: #FBF0D9; color: #8A6416; }
+.status-badge.status-out { background: #F3E3DD; color: var(--terracotta-deep); }
+
+/* ===== 庫存卡片：新版欄位與操作 ===== */
+.inv-stock-rows { display: flex; flex-direction: column; gap: 3px; margin-top: 10px; }
+.inv-stock-row { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--ink-soft); }
+.inv-stock-row .val { font-family: 'IBM Plex Mono', monospace; color: var(--ink); font-weight: 600; }
+.inv-current-row { display: flex; align-items: baseline; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.inv-current-row .num { font-size: 28px; font-weight: 700; }
+.inv-current-row .unit { font-size: 13px; color: var(--ink-soft); }
+.inv-dates { font-size: 11.5px; color: var(--ink-soft); margin-top: 8px; line-height: 1.6; }
+.inv-actions { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
+.inv-actions .btn { flex: 1 1 auto; font-size: 13px; padding: 9px 10px; min-height: 40px; }
+.inv-actions .btn-use { background: var(--terracotta); color: var(--panel); }
+.inv-actions .btn-use:hover { background: var(--terracotta-deep); }
+.inv-actions .btn-outline { background: var(--panel); color: var(--ink-soft); border: 1px solid var(--line); }
+.inv-actions .btn-outline:hover { background: var(--bg); color: var(--ink); }
+.inv-actions .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ===== Modal ===== */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 60; background: rgba(58, 50, 38, 0.35);
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.modal-card {
+  max-width: 380px; width: 100%; max-height: calc(100vh - 32px); overflow-y: auto;
+}
+.modal-card-wide { max-width: 460px; }
+.modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.modal-head h3 { font-size: 21px; margin: 0; color: var(--ink); }
+.modal-actions { display: flex; gap: 8px; margin-top: 6px; }
+.modal-actions .btn { flex: 1 1 0; }
+
+.usage-current {
+  background: #FBF6EA; border: 1px dashed #C9D1B5; border-radius: 10px;
+  padding: 10px 12px; font-size: 14px; font-weight: 700; color: var(--delft-deep); margin: 0 0 14px;
+}
+
+.stepper { display: flex; align-items: stretch; gap: 8px; }
+.stepper-btn {
+  width: 44px; min-height: 44px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--panel); font-size: 20px; font-weight: 700; color: var(--delft);
+  cursor: pointer; flex-shrink: 0;
+}
+.stepper-btn:hover { background: var(--bg); }
+.stepper input[type="number"] { text-align: center; font-size: 18px; font-weight: 700; }
+
+/* ===== 庫存明細時間軸 ===== */
+.detail-timeline { display: flex; flex-direction: column; gap: 8px; }
+.detail-tx-row {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+  border: 1px solid var(--line); border-radius: 10px; font-size: 13px; flex-wrap: wrap;
+}
+.detail-tx-row .tx-date { color: var(--ink-soft); font-family: 'IBM Plex Mono', monospace; width: 84px; }
+.detail-tx-row .tx-qty { font-weight: 700; font-family: 'IBM Plex Mono', monospace; }
+.detail-tx-row.tx-purchase .tx-qty { color: var(--sage-deep); }
+.detail-tx-row.tx-usage .tx-qty { color: var(--terracotta-deep); }
+.detail-tx-row.tx-adjustment .tx-qty { color: var(--delft-deep); }
+.detail-tx-row .tx-note { color: var(--ink-soft); flex: 1 1 100px; }
+.detail-summary {
+  margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line);
+  font-size: 13px; display: flex; flex-direction: column; gap: 4px;
+}
+.detail-summary .row { display: flex; justify-content: space-between; }
+.detail-summary .row .val { font-family: 'IBM Plex Mono', monospace; font-weight: 700; }

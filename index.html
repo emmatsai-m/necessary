@@ -18,7 +18,7 @@
       <path d="M34 24 C 20 26, 18 10, 30 4 C 33 11, 34 15, 34 15 C 34 15, 36 11, 40 4 C 52 10, 50 26, 34 24 Z" fill="#C97B82" stroke="#A85963" stroke-width="1.4" stroke-linejoin="round"/>
     </svg>
     <h2 class="hand" style="font-size:24px;margin:0 0 6px">登入</h2>
-    <p class="muted" style="margin-bottom:14px">跟另一位共同維護的人使用同一組信箱與密碼登入，就會同步看到一樣的紀錄。第一次使用請按「註冊新帳號」建立這組帳號。</p>
+    <p class="muted" style="margin-bottom:14px">跟另一位共同維護的人使用同一組信箱與密碼登入，就會同步看到一樣的紀錄。這組帳號需先由管理者在 Firebase 主控台建立好。</p>
     <form id="auth-gate-form">
       <div class="field">
         <label class="field-label">電子信箱</label>
@@ -159,12 +159,18 @@
 
     <!-- 庫存總覽頁 -->
     <section id="tab-inventory" class="tab-panel" hidden>
+      <div class="inv-stats" id="inv-stats"></div>
       <div class="filter-row">
         <div class="search-wrap">
           <span class="icon">🔍</span>
           <input type="text" id="inv-search" placeholder="搜尋品名" />
         </div>
         <select id="inv-category-filter"></select>
+      </div>
+      <div class="status-filter-row" id="inv-status-filter">
+        <button type="button" class="status-filter-btn active" data-status="all">全部</button>
+        <button type="button" class="status-filter-btn" data-status="low">庫存不足</button>
+        <button type="button" class="status-filter-btn" data-status="out">已用完</button>
       </div>
       <div id="inventory-grid" class="inv-grid"></div>
     </section>
@@ -182,6 +188,52 @@
     </section>
 
   </main>
+</div>
+
+<!-- 使用庫存 Modal -->
+<div id="usage-modal" class="modal-overlay" hidden>
+  <div class="modal-card panel">
+    <div class="modal-head">
+      <h3 class="hand" id="usage-modal-title">使用庫存</h3>
+      <button type="button" class="icon-btn" id="usage-modal-close" aria-label="關閉">✕</button>
+    </div>
+    <p class="usage-current" id="usage-current-stock"></p>
+
+    <div class="field">
+      <label class="field-label">使用數量</label>
+      <div class="stepper">
+        <button type="button" class="stepper-btn" id="usage-minus" aria-label="減少">−</button>
+        <input type="number" id="usage-qty" min="1" step="1" value="1" inputmode="numeric" />
+        <button type="button" class="stepper-btn" id="usage-plus" aria-label="增加">＋</button>
+      </div>
+    </div>
+    <div class="field">
+      <label class="field-label">使用日期</label>
+      <input type="date" id="usage-date" />
+    </div>
+    <div class="field">
+      <label class="field-label">備註（選填）</label>
+      <input type="text" id="usage-note" placeholder="例如：用完最後一罐" />
+    </div>
+
+    <p id="usage-error" class="room-gate-error" hidden></p>
+
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" id="usage-cancel">取消</button>
+      <button type="button" class="btn btn-primary" id="usage-confirm">✅ 確認使用</button>
+    </div>
+  </div>
+</div>
+
+<!-- 庫存明細 Modal -->
+<div id="detail-modal" class="modal-overlay" hidden>
+  <div class="modal-card panel modal-card-wide">
+    <div class="modal-head">
+      <h3 class="hand" id="detail-modal-title">庫存明細</h3>
+      <button type="button" class="icon-btn" id="detail-modal-close" aria-label="關閉">✕</button>
+    </div>
+    <div id="detail-modal-body" class="detail-timeline"></div>
+  </div>
 </div>
 
 <!-- Firebase（不需下載安裝，直接透過 CDN 載入） -->
