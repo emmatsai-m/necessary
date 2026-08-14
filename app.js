@@ -41,6 +41,7 @@ const state = {
   valSearch: "",
   valCategory: "全部",
   usageModalKey: null,
+  usageEditId: null,
   detailModalKey: null,
 };
 
@@ -799,35 +800,72 @@ function editLatestPurchase(key) {
   startEdit(record);
 }
 
-// ---- 使用庫存 Modal ----
+// ---- 使用庫存 Modal（新增／編輯都用這個視窗） ----
 let usageMode = "pack"; // "pack"（以罐/瓶等採購單位計）| "base"（以最小單位計）
 let usagePackSpec = null;
 
-function openUsageModal(key) {
-  const g = computeInventoryMap().get(key);
-  if (!g) return;
-  if (g.current <= 0) {
+// 取得目前 Modal 對應的品項，若正在編輯某筆使用紀錄，會先把那筆的影響加回去，
+// 這樣才能正確算出「這次可以改到多少」而不是被自己原本那筆卡住上限。
+function getUsageModalG() {
+  const gRaw = computeInventoryMap().get(state.usageModalKey);
+  if (!gRaw) return null;
+  const editTx = state.usageEditId ? state.transactions.find((t) => t.id === state.usageEditId) : null;
+  const availableCap = editTx ? gRaw.current - editTx.quantity : gRaw.current;
+  return { ...gRaw, current: availableCap };
+}
+
+function openUsageModal(key, editTx = null) {
+  const gRaw = computeInventoryMap().get(key);
+  if (!gRaw) return;
+
+  state.usageModalKey = key;
+  state.usageEditId = editTx ? editTx.id : null;
+
+  const availableCap = editTx ? gRaw.current - editTx.quantity : gRaw.current;
+  if (!editTx && gRaw.current <= 0) {
     alert("目前庫存為 0，無法使用。");
     return;
   }
-  state.usageModalKey = key;
-  usagePackSpec = getLatestPackSpec(key);
-  usageMode = usagePackSpec ? "pack" : "base";
 
-  document.getElementById("usage-modal-title").textContent = `使用庫存：${g.name}`;
+  if (editTx && editTx.packQty && editTx.packUnit && editTx.packSize) {
+    usagePackSpec = { packSize: Number(editTx.packSize), packUnit: editTx.packUnit };
+    usageMode = "pack";
+  } else if (editTx) {
+    usagePackSpec = getLatestPackSpec(key);
+    usageMode = "base";
+  } else {
+    usagePackSpec = getLatestPackSpec(key);
+    usageMode = usagePackSpec ? "pack" : "base";
+  }
+
+  const g = { ...gRaw, current: availableCap };
+
+  document.getElementById("usage-modal-title").textContent = editTx ? `編輯使用紀錄：${g.name}` : `使用庫存：${g.name}`;
+  document.getElementById("usage-confirm").textContent = editTx ? "✅ 儲存修改" : "✅ 確認使用";
+
   renderUsageStockLine(g);
   setupUsageModeButtons(g);
   applyUsageMode(g);
 
-  document.getElementById("usage-date").value = todayStr();
-  document.getElementById("usage-note").value = "";
+  if (editTx) {
+    document.getElementById("usage-qty").value = usageMode === "pack" ? editTx.packQty : Math.abs(editTx.quantity);
+    document.getElementById("usage-date").value = editTx.date || todayStr();
+    document.getElementById("usage-note").value = editTx.note || "";
+  } else {
+    document.getElementById("usage-date").value = todayStr();
+    document.getElementById("usage-note").value = "";
+  }
+  updateUsageHint(g);
+
   document.getElementById("usage-error").hidden = true;
   document.getElementById("usage-modal").hidden = false;
 }
 
 function closeUsageModal() {
   document.getElementById("usage-modal").hidden = true;
+  document.getElementById("usage-confirm").textContent = "✅ 確認使用";
   state.usageModalKey = null;
+  state.usageEditId = null;
   usagePackSpec = null;
 }
 
@@ -885,7 +923,7 @@ function updateUsageHint(g) {
 async function confirmUsage() {
   const key = state.usageModalKey;
   if (!key) return;
-  const g = computeInventoryMap().get(key);
+  const g = getUsageModalG();
   const errorMsg = document.getElementById("usage-error");
   if (!g) { closeUsageModal(); return; }
 
@@ -912,23 +950,33 @@ async function confirmUsage() {
   }
   errorMsg.hidden = true;
 
+  const payload = {
+    productId: key,
+    productName: g.name,
+    baseUnit: g.unit,
+    category: g.category,
+    type: "usage",
+    quantity: -baseQty,
+    packQty: packInfo ? packInfo.packQty : null,
+    packUnit: packInfo ? packInfo.packUnit : null,
+    packSize: packInfo ? packInfo.packSize : null,
+    date: document.getElementById("usage-date").value || todayStr(),
+    note: document.getElementById("usage-note").value.trim(),
+  };
+
   const confirmBtn = document.getElementById("usage-confirm");
   confirmBtn.disabled = true;
   try {
-    await transactionsRef.add({
-      productId: key,
-      productName: g.name,
-      baseUnit: g.unit,
-      category: g.category,
-      type: "usage",
-      quantity: -baseQty,
-      ...(packInfo ? { packQty: packInfo.packQty, packUnit: packInfo.packUnit, packSize: packInfo.packSize } : {}),
-      date: document.getElementById("usage-date").value || todayStr(),
-      note: document.getElementById("usage-note").value.trim(),
-      sourcePurchaseId: null,
-      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      createdBy: auth.currentUser ? auth.currentUser.email : "",
-    });
+    if (state.usageEditId) {
+      await transactionsRef.doc(state.usageEditId).update(payload);
+    } else {
+      await transactionsRef.add({
+        ...payload,
+        sourcePurchaseId: null,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        createdBy: auth.currentUser ? auth.currentUser.email : "",
+      });
+    }
     closeUsageModal();
   } catch (err) {
     console.error("使用紀錄寫入失敗：", err);
@@ -939,7 +987,7 @@ async function confirmUsage() {
   }
 }
 
-// ---- 庫存明細 Modal ----
+// ---- 庫存明細 Modal（同時是原始資料的修改／刪除入口） ----
 function openDetailModal(key) {
   state.detailModalKey = key;
   renderDetailModal();
@@ -971,12 +1019,19 @@ function renderDetailModal() {
     } else {
       qtyText = `${sign}${fmtNum(t.quantity)} ${escapeHtml(g.unit)}`;
     }
+    const canEdit = t.type === "purchase" ? !!t.sourcePurchaseId : t.type === "usage";
+    const actionsHtml = `
+      <span class="detail-tx-actions">
+        ${canEdit ? `<button type="button" class="icon-btn icon-btn-sm" data-action="edit-tx" data-id="${t.id}" aria-label="修改">✏️</button>` : ""}
+        <button type="button" class="icon-btn icon-btn-sm icon-btn-danger" data-action="delete-tx" data-id="${t.id}" aria-label="刪除">🗑️</button>
+      </span>`;
     return `
       <div class="detail-tx-row tx-${t.type}">
         <span class="tx-date">${fmtDate(t.date)}</span>
         <span>${icon} ${label}</span>
         <span class="tx-qty">${qtyText}</span>
         <span class="tx-note">${escapeHtml(t.note || "")}</span>
+        ${actionsHtml}
       </div>`;
   }).join("") || `<p class="muted">尚無異動紀錄。</p>`;
 
@@ -988,6 +1043,52 @@ function renderDetailModal() {
       <div class="row"><span>目前庫存</span><span class="val">${fmtNum(g.current)} ${escapeHtml(g.unit)}</span></div>
     </div>
   `;
+
+  document.querySelectorAll('#detail-modal-body [data-action="edit-tx"]').forEach((btn) => {
+    btn.addEventListener("click", () => handleDetailTxAction("edit", btn.dataset.id));
+  });
+  document.querySelectorAll('#detail-modal-body [data-action="delete-tx"]').forEach((btn) => {
+    btn.addEventListener("click", () => handleDetailTxAction("delete", btn.dataset.id));
+  });
+}
+
+function handleDetailTxAction(action, txId) {
+  const tx = state.transactions.find((t) => t.id === txId);
+  if (!tx) return;
+
+  if (action === "edit") {
+    if (tx.type === "purchase") {
+      const record = state.records.find((r) => r.id === tx.sourcePurchaseId);
+      if (!record) { alert("找不到對應的採購紀錄，可能已被刪除。"); return; }
+      closeDetailModal();
+      startEdit(record);
+    } else if (tx.type === "usage") {
+      openUsageModal(tx.productId, tx);
+    }
+    return;
+  }
+
+  if (action === "delete") {
+    if (tx.type === "purchase") {
+      closeDetailModal();
+      doDelete(tx.sourcePurchaseId);
+    } else {
+      deleteSimpleTransaction(tx);
+    }
+  }
+}
+
+async function deleteSimpleTransaction(tx) {
+  const typeLabel = tx.type === "usage" ? "使用" : "調整";
+  const revert = tx.quantity < 0 ? `+${fmtNum(Math.abs(tx.quantity))}` : `-${fmtNum(tx.quantity)}`;
+  const ok = confirm(`確定要刪除這筆${typeLabel}紀錄嗎？\n\n刪除後現有庫存會回補這筆的影響（${revert} ${tx.baseUnit}）。`);
+  if (!ok) return;
+  try {
+    await transactionsRef.doc(tx.id).delete();
+  } catch (err) {
+    console.error("刪除失敗：", err);
+    alert("刪除失敗，請確認網路連線。");
+  }
 }
 
 function setupModals() {
@@ -999,14 +1100,14 @@ function setupModals() {
   document.getElementById("usage-mode-pack").addEventListener("click", () => {
     if (!usagePackSpec) return;
     usageMode = "pack";
-    const g = computeInventoryMap().get(state.usageModalKey);
+    const g = getUsageModalG();
     if (!g) return;
     setupUsageModeButtons(g);
     applyUsageMode(g);
   });
   document.getElementById("usage-mode-base").addEventListener("click", () => {
     usageMode = "base";
-    const g = computeInventoryMap().get(state.usageModalKey);
+    const g = getUsageModalG();
     if (!g) return;
     setupUsageModeButtons(g);
     applyUsageMode(g);
@@ -1014,18 +1115,18 @@ function setupModals() {
   document.getElementById("usage-minus").addEventListener("click", () => {
     const input = document.getElementById("usage-qty");
     input.value = Math.max(1, (Number(input.value) || 1) - 1);
-    const g = computeInventoryMap().get(state.usageModalKey);
+    const g = getUsageModalG();
     if (g) updateUsageHint(g);
   });
   document.getElementById("usage-plus").addEventListener("click", () => {
     const input = document.getElementById("usage-qty");
     const max = Number(input.max) || Infinity;
     input.value = Math.min(max, (Number(input.value) || 1) + 1);
-    const g = computeInventoryMap().get(state.usageModalKey);
+    const g = getUsageModalG();
     if (g) updateUsageHint(g);
   });
   document.getElementById("usage-qty").addEventListener("input", () => {
-    const g = computeInventoryMap().get(state.usageModalKey);
+    const g = getUsageModalG();
     if (g) updateUsageHint(g);
   });
   document.getElementById("usage-confirm").addEventListener("click", confirmUsage);

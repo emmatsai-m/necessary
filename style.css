@@ -347,6 +347,7 @@ label.field-label {
 .detail-tx-row.tx-usage .tx-qty { color: var(--terracotta-deep); }
 .detail-tx-row.tx-adjustment .tx-qty { color: var(--delft-deep); }
 .detail-tx-row .tx-note { color: var(--ink-soft); flex: 1 1 100px; }
+.detail-tx-row .detail-tx-actions { display: flex; gap: 4px; margin-left: auto; flex-shrink: 0; }
 .detail-summary {
   margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line);
   font-size: 13px; display: flex; flex-direction: column; gap: 4px;
