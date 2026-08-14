@@ -25,6 +25,7 @@ let unsubscribeTransactions = null;
 let purchasesLoaded = false;
 let transactionsLoaded = false;
 let migrationInProgress = false;
+let dedupeInProgress = false;
 
 // ---- 全域狀態 ----
 const state = {
@@ -209,6 +210,7 @@ function subscribeToTransactions() {
       state.transactions = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       transactionsLoaded = true;
       maybeBackfillTransactions();
+      maybeDedupePurchaseTransactions();
       renderAll();
     },
     (err) => {
@@ -230,7 +232,8 @@ function maybeBackfillTransactions() {
   migrationInProgress = true;
   const batch = db.batch();
   missing.forEach((r) => {
-    const ref = transactionsRef.doc();
+    // 用固定 ID（而非隨機 ID）避免多裝置／多分頁同時觸發時，各自建立出重複的補建紀錄
+    const ref = transactionsRef.doc(`backfill-${r.id}`);
     batch.set(ref, {
       productId: makeProductId(r.name, r.baseUnit),
       productName: r.name,
@@ -251,6 +254,39 @@ function maybeBackfillTransactions() {
   batch.commit()
     .catch((err) => console.error("補建庫存異動失敗：", err))
     .finally(() => { migrationInProgress = false; });
+}
+
+// 清理「同一筆採購被重複補建」的異動（例如兩個裝置/分頁曾經同時觸發舊版補建邏輯所留下的重複資料）。
+// 只保留最早建立的一筆，其餘刪除；已經修好的補建邏輯不會再產生新的重複，這裡只負責清掉歷史遺留。
+function maybeDedupePurchaseTransactions() {
+  if (!transactionsLoaded || dedupeInProgress) return;
+
+  const byPurchaseId = new Map();
+  for (const t of state.transactions) {
+    if (t.type !== "purchase" || !t.sourcePurchaseId) continue;
+    if (!byPurchaseId.has(t.sourcePurchaseId)) byPurchaseId.set(t.sourcePurchaseId, []);
+    byPurchaseId.get(t.sourcePurchaseId).push(t);
+  }
+
+  const toDeleteIds = [];
+  byPurchaseId.forEach((txs) => {
+    if (txs.length <= 1) return;
+    txs.sort((a, b) => {
+      const at = a.createdAt && a.createdAt.toMillis ? a.createdAt.toMillis() : 0;
+      const bt = b.createdAt && b.createdAt.toMillis ? b.createdAt.toMillis() : 0;
+      return at - bt;
+    });
+    txs.slice(1).forEach((t) => toDeleteIds.push(t.id));
+  });
+  if (toDeleteIds.length === 0) return;
+
+  dedupeInProgress = true;
+  const batch = db.batch();
+  toDeleteIds.forEach((id) => batch.delete(transactionsRef.doc(id)));
+  batch.commit()
+    .then(() => console.log(`已清除 ${toDeleteIds.length} 筆重複的補建庫存異動`))
+    .catch((err) => console.error("清除重複異動失敗：", err))
+    .finally(() => { dedupeInProgress = false; });
 }
 
 // ---- 表單（新增／編輯採購紀錄） ----
