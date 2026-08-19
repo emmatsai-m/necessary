@@ -12,6 +12,9 @@ const BASE_UNITS = ["ml", "L", "g", "kg", "片", "顆", "錠", "個", "其他"];
 const PACK_UNITS = ["罐", "瓶", "包", "條", "盒", "箱", "組", "個", "其他"];
 const MINIMUM_STOCK_DEFAULT = 1; // 最低庫存量，目前全品項統一預設
 
+// 閒置多久（分鐘）沒有操作就自動登出，需要重新輸入信箱密碼；設成 0 表示停用這個機制。
+const IDLE_TIMEOUT_MINUTES = 60;
+
 // ---- Firebase 初始化 ----
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
@@ -105,7 +108,39 @@ document.addEventListener("DOMContentLoaded", () => {
   setupStatusFilter();
   setupModals();
   setupAuthGate();
+  setupIdleTimeout();
 });
+
+// ---- 閒置自動登出 ----
+const IDLE_STORAGE_KEY = "household-inventory-last-activity";
+
+function recordActivity() {
+  try { localStorage.setItem(IDLE_STORAGE_KEY, String(Date.now())); } catch (e) { /* 忽略無法寫入的情況 */ }
+}
+
+function checkIdleTimeout() {
+  if (!IDLE_TIMEOUT_MINUTES || IDLE_TIMEOUT_MINUTES <= 0) return;
+  if (!auth.currentUser) return;
+  let last;
+  try {
+    last = Number(localStorage.getItem(IDLE_STORAGE_KEY)) || Date.now();
+  } catch (e) {
+    last = Date.now();
+  }
+  const idleMs = Date.now() - last;
+  if (idleMs > IDLE_TIMEOUT_MINUTES * 60 * 1000) {
+    auth.signOut();
+  }
+}
+
+function setupIdleTimeout() {
+  ["click", "keydown", "mousemove", "touchstart", "scroll"].forEach((evt) => {
+    document.addEventListener(evt, recordActivity, { passive: true });
+  });
+  recordActivity();
+  checkIdleTimeout(); // 打開網頁當下也先檢查一次（例如很久沒開，一打開就先登出）
+  setInterval(checkIdleTimeout, 60 * 1000); // 之後每分鐘檢查一次
+}
 
 // ---- 登入流程（信箱＋密碼） ----
 function setupAuthGate() {
@@ -160,6 +195,7 @@ function setupAuthGate() {
 }
 
 function enterApp(user) {
+  recordActivity(); // 重新整理閒置計時起點，避免用之前殘留的舊時間戳一登入就被判定逾時
   purchasesRef = db.collection("users").doc(user.uid).collection("purchases");
   transactionsRef = db.collection("users").doc(user.uid).collection("inventoryTransactions");
   document.getElementById("user-badge").textContent = user.email;
@@ -665,16 +701,23 @@ function computeInventoryList() {
     if (g.current <= 0) status = "out";
     else if (g.current <= minimumStock) status = "low";
     const packSpec = getLatestPackSpec(g.key);
-    return { ...g, minimumStock, status, packSpec };
+    const latestNote = getLatestPurchaseNote(g.key);
+    return { ...g, minimumStock, status, packSpec, latestNote };
   });
+}
+
+// 取得該品項「最近一次採購」對應的庫存異動（type=purchase）
+function getLatestPurchaseTx(key) {
+  const purchaseTxs = state.transactions.filter((t) => t.productId === key && t.type === "purchase");
+  if (purchaseTxs.length === 0) return null;
+  purchaseTxs.sort((a, b) => (a.date < b.date ? 1 : -1));
+  return purchaseTxs[0];
 }
 
 // 取得該品項「最近一次採購」的包裝規格（例如 700ml/罐），供使用庫存時換算成罐數
 function getLatestPackSpec(key) {
-  const purchaseTxs = state.transactions.filter((t) => t.productId === key && t.type === "purchase");
-  if (purchaseTxs.length === 0) return null;
-  purchaseTxs.sort((a, b) => (a.date < b.date ? 1 : -1));
-  const latest = purchaseTxs[0];
+  const latest = getLatestPurchaseTx(key);
+  if (!latest) return null;
   if (latest.packSize && latest.packUnit) {
     return { packSize: Number(latest.packSize), packUnit: latest.packUnit };
   }
@@ -686,6 +729,14 @@ function getLatestPackSpec(key) {
     }
   }
   return null;
+}
+
+// 取得該品項「最近一次採購」的備註（直接以採購紀錄本身為準，編輯採購時會自動更新到最新）
+function getLatestPurchaseNote(key) {
+  const latest = getLatestPurchaseTx(key);
+  if (!latest || !latest.sourcePurchaseId) return "";
+  const record = state.records.find((r) => r.id === latest.sourcePurchaseId);
+  return record ? (record.note || "").trim() : "";
 }
 
 function filterInventoryList(list) {
@@ -761,6 +812,8 @@ function renderInventory() {
             最近採購：${fmtDate(g.lastPurchaseDate)}<br/>
             最近使用：${g.lastUsedDate ? fmtDate(g.lastUsedDate) : "—"}
           </div>
+
+          ${g.latestNote ? `<div class="inv-note" title="${escapeHtml(g.latestNote)}">📝 ${escapeHtml(g.latestNote)}</div>` : ""}
 
           <div class="inv-actions">
             <button type="button" class="btn btn-use" data-action="use" data-key="${g.key}" ${g.current <= 0 ? "disabled" : ""}>➖ 使用</button>
@@ -1180,6 +1233,7 @@ function renderValue() {
           <span class="unit-price mono">NT$${fmtNum(up, 3)} / ${escapeHtml(g.unit)}</span>
           ${isBest ? `<span class="tag-pill best-badge">👑 最划算</span>` : ""}
           <button class="icon-btn icon-btn-sm" data-action="edit" data-id="${r.id}" aria-label="修改此筆">✏️</button>
+          ${r.note ? `<div class="value-note" title="${escapeHtml(r.note)}">📝 ${escapeHtml(r.note)}</div>` : ""}
         </div>`;
     }).join("");
 
