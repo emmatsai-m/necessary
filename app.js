@@ -13,7 +13,7 @@ const PACK_UNITS = ["罐", "瓶", "包", "條", "盒", "箱", "組", "個", "其
 const MINIMUM_STOCK_DEFAULT = 1; // 最低庫存量，目前全品項統一預設
 
 // 閒置多久（分鐘）沒有操作就自動登出，需要重新輸入信箱密碼；設成 0 表示停用這個機制。
-const IDLE_TIMEOUT_MINUTES = 60;
+const IDLE_TIMEOUT_MINUTES = 0;
 
 // ---- Firebase 初始化 ----
 firebase.initializeApp(firebaseConfig);
