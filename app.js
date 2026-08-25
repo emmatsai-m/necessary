@@ -10,10 +10,12 @@
 const CATEGORIES = ["清潔用品", "生活用品", "美妝保養", "醫療保健"];
 const BASE_UNITS = ["ml", "L", "g", "kg", "片", "顆", "錠", "個", "其他"];
 const PACK_UNITS = ["罐", "瓶", "包", "條", "盒", "箱", "組", "個", "其他"];
+const LOCATIONS = ["台北", "新竹"];
 const MINIMUM_STOCK_DEFAULT = 1; // 最低庫存量，目前全品項統一預設
+const INV_PAGE_SIZE = 12; // 庫存總覽每頁顯示的卡片數
 
 // 閒置多久（分鐘）沒有操作就自動登出，需要重新輸入信箱密碼；設成 0 表示停用這個機制。
-const IDLE_TIMEOUT_MINUTES = 0;
+const IDLE_TIMEOUT_MINUTES = 60;
 
 // ---- Firebase 初始化 ----
 firebase.initializeApp(firebaseConfig);
@@ -39,7 +41,9 @@ const state = {
   confirmDeleteId: null,
   invSearch: "",
   invCategory: "全部",
+  invLocation: "全部",
   invStatusFilter: "all", // all | low | out
+  invPage: 1,
   expandedKey: null,
   valSearch: "",
   valCategory: "全部",
@@ -79,9 +83,10 @@ function escapeHtml(str) {
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
   }[c]));
 }
-// 商品身分＝品名＋最小單位；用來把同一品項的所有庫存異動歸在一起
-function makeProductId(name, baseUnit) {
-  const raw = `${(name || "").trim()}__${baseUnit}`;
+// 商品身分＝品名＋最小單位＋存放地點；用來把同一品項（同地點）的所有庫存異動歸在一起，
+// 不同地點視為不同庫存群組，避免台北、新竹兩邊的庫存互相混算。
+function makeProductId(name, baseUnit, location) {
+  const raw = `${(name || "").trim()}__${baseUnit}__${location || ""}`;
   return raw.replace(/[\/.#$\[\]]/g, "_") || "unknown";
 }
 
@@ -98,18 +103,46 @@ document.addEventListener("DOMContentLoaded", () => {
   fillSelect(document.getElementById("f-category"), CATEGORIES);
   fillSelect(document.getElementById("f-baseUnit"), BASE_UNITS);
   fillSelect(document.getElementById("f-packUnit"), PACK_UNITS);
-  fillFilterSelect(document.getElementById("inv-category-filter"), CATEGORIES);
   fillFilterSelect(document.getElementById("val-category-filter"), CATEGORIES);
   document.getElementById("f-purchaseDate").value = todayStr();
 
+  setupCategoryField();
+  setupLocationField();
   setupTabs();
   setupForm();
   setupFilters();
   setupStatusFilter();
+  setupInvFilterButtons();
   setupModals();
   setupAuthGate();
   setupIdleTimeout();
 });
+
+// 分類選擇「醫療保健」時，多顯示「有效期限」欄位
+function setupCategoryField() {
+  const sel = document.getElementById("f-category");
+  sel.addEventListener("change", () => {
+    document.getElementById("f-expiry-wrap").style.display = sel.value === "醫療保健" ? "block" : "none";
+  });
+}
+
+// 存放地點：表單裡的按鈕選單（單選）
+function setupLocationField() {
+  document.querySelectorAll("#f-location-buttons .location-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("#f-location-buttons .location-btn").forEach((b) => b.classList.toggle("active", b === btn));
+    });
+  });
+}
+function getSelectedFormLocation() {
+  const activeBtn = document.querySelector("#f-location-buttons .location-btn.active");
+  return activeBtn ? activeBtn.dataset.location : LOCATIONS[0];
+}
+function setFormLocation(loc) {
+  document.querySelectorAll("#f-location-buttons .location-btn").forEach((b) => {
+    b.classList.toggle("active", b.dataset.location === (loc || LOCATIONS[0]));
+  });
+}
 
 // ---- 閒置自動登出 ----
 const IDLE_STORAGE_KEY = "household-inventory-last-activity";
@@ -272,10 +305,11 @@ function maybeBackfillTransactions() {
     // 用固定 ID（而非隨機 ID）避免多裝置／多分頁同時觸發時，各自建立出重複的補建紀錄
     const ref = transactionsRef.doc(`backfill-${r.id}`);
     batch.set(ref, {
-      productId: makeProductId(r.name, r.baseUnit),
+      productId: makeProductId(r.name, r.baseUnit, r.location),
       productName: r.name,
       baseUnit: r.baseUnit,
       category: r.category,
+      location: r.location || "",
       type: "purchase",
       quantity: totalBase(r),
       packQty: r.packQty,
@@ -354,7 +388,7 @@ function setupForm() {
     const submitBtn = document.getElementById("submit-btn");
     submitBtn.disabled = true;
     try {
-      const productId = makeProductId(payload.name, payload.baseUnit);
+      const productId = makeProductId(payload.name, payload.baseUnit, payload.location);
       const txQuantity = totalBase(payload);
 
       if (state.editingId) {
@@ -369,6 +403,7 @@ function setupForm() {
             productName: payload.name,
             baseUnit: payload.baseUnit,
             category: payload.category,
+            location: payload.location,
             quantity: txQuantity,
             packQty: payload.packQty,
             packUnit: payload.packUnit,
@@ -381,6 +416,7 @@ function setupForm() {
             productName: payload.name,
             baseUnit: payload.baseUnit,
             category: payload.category,
+            location: payload.location,
             type: "purchase",
             quantity: txQuantity,
             packQty: payload.packQty,
@@ -403,6 +439,7 @@ function setupForm() {
           productName: payload.name,
           baseUnit: payload.baseUnit,
           category: payload.category,
+          location: payload.location,
           type: "purchase",
           quantity: txQuantity,
           packQty: payload.packQty,
@@ -461,10 +498,12 @@ function getFormPayload() {
     ? (document.getElementById("f-customPackUnit").value.trim() || "其他")
     : packUnitSel;
   const priceVal = document.getElementById("f-price").value;
+  const category = document.getElementById("f-category").value;
+  const expiryVal = document.getElementById("f-expiryDate").value;
 
   return {
     name,
-    category: document.getElementById("f-category").value,
+    category,
     baseUnit,
     packSize: Number(packSize),
     packUnit,
@@ -472,6 +511,8 @@ function getFormPayload() {
     purchaseDate: document.getElementById("f-purchaseDate").value || todayStr(),
     price: priceVal === "" ? null : Number(priceVal),
     purchaser: document.getElementById("f-purchaser").value.trim(),
+    location: getSelectedFormLocation(),
+    expiryDate: category === "醫療保健" && expiryVal ? expiryVal : null,
     note: document.getElementById("f-note").value.trim(),
   };
 }
@@ -482,6 +523,8 @@ function resetForm() {
   document.getElementById("f-purchaseDate").value = todayStr();
   document.getElementById("f-customBaseUnit-wrap").style.display = "none";
   document.getElementById("f-customPackUnit-wrap").style.display = "none";
+  document.getElementById("f-expiry-wrap").style.display = "none";
+  setFormLocation(LOCATIONS[0]);
   document.getElementById("form-title").textContent = "新增採購紀錄";
   document.getElementById("cancel-edit-btn").style.display = "none";
   document.getElementById("submit-btn").innerHTML = "➕ 新增紀錄";
@@ -493,6 +536,9 @@ function startEdit(record) {
   state.editingId = record.id;
   document.getElementById("f-name").value = record.name;
   document.getElementById("f-category").value = record.category;
+  document.getElementById("f-expiry-wrap").style.display = record.category === "醫療保健" ? "block" : "none";
+  document.getElementById("f-expiryDate").value = record.expiryDate || "";
+  setFormLocation(record.location);
 
   const baseUnitSel = document.getElementById("f-baseUnit");
   if (BASE_UNITS.includes(record.baseUnit)) {
@@ -557,10 +603,7 @@ async function doDelete(id) {
 function setupFilters() {
   document.getElementById("inv-search").addEventListener("input", (e) => {
     state.invSearch = e.target.value;
-    renderInventory();
-  });
-  document.getElementById("inv-category-filter").addEventListener("change", (e) => {
-    state.invCategory = e.target.value;
+    state.invPage = 1;
     renderInventory();
   });
   document.getElementById("val-search").addEventListener("input", (e) => {
@@ -573,11 +616,50 @@ function setupFilters() {
   });
 }
 
+// 庫存總覽的分類／存放地點按鈕（一開始只建立一次 DOM 與監聽，之後每次 render 只切換 active 樣式）
+function setupInvFilterButtons() {
+  const catContainer = document.getElementById("inv-category-buttons");
+  catContainer.innerHTML = ["全部", ...CATEGORIES].map((c) =>
+    `<button type="button" class="status-filter-btn" data-category="${escapeHtml(c)}">${escapeHtml(c)}</button>`
+  ).join("");
+  catContainer.querySelectorAll("[data-category]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.invCategory = btn.dataset.category;
+      state.invPage = 1;
+      renderInventory();
+    });
+  });
+
+  const locContainer = document.getElementById("inv-location-buttons");
+  locContainer.innerHTML = ["全部", ...LOCATIONS].map((l) =>
+    `<button type="button" class="status-filter-btn" data-location="${escapeHtml(l)}">${escapeHtml(l)}</button>`
+  ).join("");
+  locContainer.querySelectorAll("[data-location]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.invLocation = btn.dataset.location;
+      state.invPage = 1;
+      renderInventory();
+    });
+  });
+
+  updateInvFilterButtonActiveStates();
+}
+
+function updateInvFilterButtonActiveStates() {
+  document.querySelectorAll("#inv-category-buttons [data-category]").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.category === state.invCategory);
+  });
+  document.querySelectorAll("#inv-location-buttons [data-location]").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.location === state.invLocation);
+  });
+}
+
 function setupStatusFilter() {
-  document.querySelectorAll(".status-filter-btn").forEach((btn) => {
+  document.querySelectorAll("#inv-status-filter .status-filter-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       state.invStatusFilter = btn.dataset.status;
-      document.querySelectorAll(".status-filter-btn").forEach((b) => b.classList.toggle("active", b === btn));
+      document.querySelectorAll("#inv-status-filter .status-filter-btn").forEach((b) => b.classList.toggle("active", b === btn));
+      state.invPage = 1;
       renderInventory();
     });
   });
@@ -660,6 +742,7 @@ function computeInventoryMap() {
         name: t.productName,
         unit: t.baseUnit,
         category: t.category,
+        location: t.location || "",
         purchased: 0,
         used: 0,
         adjustment: 0,
@@ -682,11 +765,12 @@ function computeInventoryMap() {
     } else if (t.type === "adjustment") {
       g.adjustment += qty;
     }
-    // 品名／分類／單位以最新一筆異動為準（例如編輯採購紀錄改了名稱）
+    // 品名／分類／單位／地點以最新一筆異動為準（例如編輯採購紀錄改了名稱）
     if (!g._latestDate || t.date >= g._latestDate) {
       g.name = t.productName;
       g.unit = t.baseUnit;
       g.category = t.category;
+      g.location = t.location || "";
       g._latestDate = t.date;
     }
   }
@@ -702,7 +786,8 @@ function computeInventoryList() {
     else if (g.current <= minimumStock) status = "low";
     const packSpec = getLatestPackSpec(g.key);
     const latestNote = getLatestPurchaseNote(g.key);
-    return { ...g, minimumStock, status, packSpec, latestNote };
+    const latestExpiry = getLatestPurchaseExpiry(g.key);
+    return { ...g, minimumStock, status, packSpec, latestNote, latestExpiry };
   });
 }
 
@@ -739,6 +824,28 @@ function getLatestPurchaseNote(key) {
   return record ? (record.note || "").trim() : "";
 }
 
+// 取得該品項「最近一次採購」的有效期限（僅醫療保健類會有值）
+function getLatestPurchaseExpiry(key) {
+  const latest = getLatestPurchaseTx(key);
+  if (!latest || !latest.sourcePurchaseId) return "";
+  const record = state.records.find((r) => r.id === latest.sourcePurchaseId);
+  return record ? (record.expiryDate || "") : "";
+}
+
+// 依有效期限判斷顯示的標籤（過期／即將到期／正常）
+function expiryBadgeHtml(expiryDate) {
+  if (!expiryDate) return "";
+  const today = todayStr();
+  if (expiryDate < today) {
+    return `<span class="expiry-badge expiry-expired">⚠️ 已過期（${fmtDate(expiryDate)}）</span>`;
+  }
+  const daysLeft = Math.ceil((new Date(expiryDate) - new Date(today)) / 86400000);
+  if (daysLeft <= 30) {
+    return `<span class="expiry-badge expiry-soon">⏳ ${fmtDate(expiryDate)} 到期</span>`;
+  }
+  return `<span class="expiry-badge expiry-ok">🗓️ 效期至 ${fmtDate(expiryDate)}</span>`;
+}
+
 function filterInventoryList(list) {
   let out = [...list].sort((a, b) => {
     const da = a.lastPurchaseDate || "";
@@ -746,6 +853,7 @@ function filterInventoryList(list) {
     return da < db_ ? 1 : -1;
   });
   if (state.invCategory !== "全部") out = out.filter((g) => g.category === state.invCategory);
+  if (state.invLocation !== "全部") out = out.filter((g) => g.location === state.invLocation);
   if (state.invStatusFilter === "low") out = out.filter((g) => g.status === "low");
   if (state.invStatusFilter === "out") out = out.filter((g) => g.status === "out");
   if (state.invSearch.trim()) {
@@ -769,17 +877,27 @@ function renderInvStats(allList) {
 }
 
 function renderInventory() {
+  updateInvFilterButtonActiveStates();
+
   const allList = computeInventoryList();
   renderInvStats(allList);
-  const list = filterInventoryList(allList);
+  const filtered = filterInventoryList(allList);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / INV_PAGE_SIZE));
+  if (state.invPage > totalPages) state.invPage = totalPages;
+  if (state.invPage < 1) state.invPage = 1;
+  const startIdx = (state.invPage - 1) * INV_PAGE_SIZE;
+  const pageList = filtered.slice(startIdx, startIdx + INV_PAGE_SIZE);
+
   const container = document.getElementById("inventory-grid");
 
-  if (list.length === 0) {
+  if (filtered.length === 0) {
     container.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><p>找不到符合條件的品項。</p></div>`;
+    renderInvPagination(0, 1);
     return;
   }
 
-  container.innerHTML = list.map((g) => {
+  container.innerHTML = pageList.map((g) => {
     const cat = catClass(g.category);
     const statusLabel = g.status === "out" ? "🔴 缺貨" : g.status === "low" ? "🟡 庫存偏低" : "🟢 有庫存";
     const ps = g.packSpec;
@@ -792,6 +910,7 @@ function renderInventory() {
           <div class="inv-card-top">
             <div>
               <span class="tag-pill cat-${cat}">${escapeHtml(g.category)}</span>
+              <span class="tag-pill loc-pill">📍 ${escapeHtml(g.location || "未設定地點")}</span>
               <span class="status-badge status-${g.status}">${statusLabel}</span>
               <h3 class="hand inv-card-name">${escapeHtml(g.name)}</h3>
             </div>
@@ -813,6 +932,8 @@ function renderInventory() {
             最近使用：${g.lastUsedDate ? fmtDate(g.lastUsedDate) : "—"}
           </div>
 
+          ${g.latestExpiry ? `<div class="inv-expiry">${expiryBadgeHtml(g.latestExpiry)}</div>` : ""}
+
           ${g.latestNote ? `<div class="inv-note" title="${escapeHtml(g.latestNote)}">📝 ${escapeHtml(g.latestNote)}</div>` : ""}
 
           <div class="inv-actions">
@@ -833,6 +954,37 @@ function renderInventory() {
   container.querySelectorAll('[data-action="detail"]').forEach((btn) => {
     btn.addEventListener("click", () => openDetailModal(btn.dataset.key));
   });
+
+  renderInvPagination(filtered.length, totalPages);
+}
+
+function renderInvPagination(totalItems, totalPages) {
+  const el = document.getElementById("inv-pagination");
+  if (totalItems <= INV_PAGE_SIZE) {
+    el.innerHTML = "";
+    return;
+  }
+  el.innerHTML = `
+    <button type="button" class="page-btn" id="inv-page-prev" ${state.invPage <= 1 ? "disabled" : ""}>‹ 上一頁</button>
+    <span class="page-info">第 ${state.invPage} / ${totalPages} 頁</span>
+    <button type="button" class="page-btn" id="inv-page-next" ${state.invPage >= totalPages ? "disabled" : ""}>下一頁 ›</button>
+  `;
+  const prevBtn = document.getElementById("inv-page-prev");
+  const nextBtn = document.getElementById("inv-page-next");
+  if (prevBtn) {
+    prevBtn.addEventListener("click", () => {
+      state.invPage -= 1;
+      renderInventory();
+      document.getElementById("inventory-grid").scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+  if (nextBtn) {
+    nextBtn.addEventListener("click", () => {
+      state.invPage += 1;
+      renderInventory();
+      document.getElementById("inventory-grid").scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
 }
 
 // 點卡片上的「編輯」＝編輯這個品項最新一筆採購紀錄
@@ -1231,6 +1383,7 @@ function renderValue() {
           <span class="pack mono">${fmtNum(r.packQty, 0)}${escapeHtml(r.packUnit)}（${fmtNum(r.packSize)}${escapeHtml(r.baseUnit)}/${escapeHtml(r.packUnit)}）</span>
           <span class="price mono">NT$${fmtNum(r.price)}</span>
           <span class="unit-price mono">NT$${fmtNum(up, 3)} / ${escapeHtml(g.unit)}</span>
+          ${r.purchaser ? `<span class="value-purchaser">🧑 ${escapeHtml(r.purchaser)}</span>` : ""}
           ${isBest ? `<span class="tag-pill best-badge">👑 最划算</span>` : ""}
           <button class="icon-btn icon-btn-sm" data-action="edit" data-id="${r.id}" aria-label="修改此筆">✏️</button>
           ${r.note ? `<div class="value-note" title="${escapeHtml(r.note)}">📝 ${escapeHtml(r.note)}</div>` : ""}

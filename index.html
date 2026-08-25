@@ -93,6 +93,11 @@
             <select id="f-category"></select>
           </div>
 
+          <div class="field" id="f-expiry-wrap" style="display:none">
+            <label class="field-label">有效期限</label>
+            <input type="date" id="f-expiryDate" />
+          </div>
+
           <div class="spec-box">
             <p class="spec-label">🌿 計價最小單位（用於算性價比）</p>
             <div class="two-col">
@@ -146,6 +151,14 @@
           </div>
 
           <div class="field">
+            <label class="field-label">存放地點</label>
+            <div class="mode-toggle" id="f-location-buttons">
+              <button type="button" class="mode-toggle-btn location-btn active" data-location="台北">台北</button>
+              <button type="button" class="mode-toggle-btn location-btn" data-location="新竹">新竹</button>
+            </div>
+          </div>
+
+          <div class="field">
             <label class="field-label">備註（選填）</label>
             <textarea id="f-note" rows="2" placeholder="例如：特價、規格說明"></textarea>
           </div>
@@ -162,13 +175,14 @@
 
     <!-- 庫存總覽頁 -->
     <section id="tab-inventory" class="tab-panel" hidden>
-      <div class="inv-stats" id="inv-stats"></div>
+      <div class="filter-btn-row" id="inv-category-buttons"></div>
+      <div class="filter-btn-row" id="inv-location-buttons"></div>
+      <div class="inv-stats inv-stats-compact" id="inv-stats"></div>
       <div class="filter-row">
         <div class="search-wrap">
           <span class="icon">🔍</span>
           <input type="text" id="inv-search" placeholder="搜尋品名" />
         </div>
-        <select id="inv-category-filter"></select>
       </div>
       <div class="status-filter-row" id="inv-status-filter">
         <button type="button" class="status-filter-btn active" data-status="all">全部</button>
@@ -176,6 +190,7 @@
         <button type="button" class="status-filter-btn" data-status="out">已用完</button>
       </div>
       <div id="inventory-grid" class="inv-grid"></div>
+      <div class="pagination-row" id="inv-pagination"></div>
     </section>
 
     <!-- 性價比比較頁 -->
