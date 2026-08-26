@@ -225,8 +225,14 @@ label.field-label {
 /* 篩選列 */
 .filter-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
 .search-wrap { position: relative; flex: 1 1 220px; }
-.search-wrap input { padding-left: 34px; }
+.search-wrap input { padding-left: 34px; padding-right: 34px; }
 .search-wrap .icon { position: absolute; left: 12px; top: 13px; color: var(--ink-soft); }
+.search-clear-btn {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  width: 26px; height: 26px; border: none; background: transparent; border-radius: 50%;
+  color: var(--ink-soft); font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.search-clear-btn:hover { background: var(--bg); color: var(--ink); }
 .filter-row select { width: 150px; flex: 0 1 150px; }
 
 /* 庫存總覽頁 */

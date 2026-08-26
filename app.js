@@ -94,37 +94,24 @@ function makeProductId(name, baseUnit, location) {
 function fillSelect(el, options) {
   el.innerHTML = options.map((o) => `<option value="${o}">${o}</option>`).join("");
 }
-function fillFilterSelect(el, options) {
-  el.innerHTML = `<option value="全部">全部分類</option>` +
-    options.map((o) => `<option value="${o}">${o}</option>`).join("");
-}
 
 document.addEventListener("DOMContentLoaded", () => {
   fillSelect(document.getElementById("f-category"), CATEGORIES);
   fillSelect(document.getElementById("f-baseUnit"), BASE_UNITS);
   fillSelect(document.getElementById("f-packUnit"), PACK_UNITS);
-  fillFilterSelect(document.getElementById("val-category-filter"), CATEGORIES);
   document.getElementById("f-purchaseDate").value = todayStr();
 
-  setupCategoryField();
   setupLocationField();
   setupTabs();
   setupForm();
   setupFilters();
   setupStatusFilter();
   setupInvFilterButtons();
+  setupValFilterButtons();
   setupModals();
   setupAuthGate();
   setupIdleTimeout();
 });
-
-// 分類選擇「醫療保健」時，多顯示「有效期限」欄位
-function setupCategoryField() {
-  const sel = document.getElementById("f-category");
-  sel.addEventListener("change", () => {
-    document.getElementById("f-expiry-wrap").style.display = sel.value === "醫療保健" ? "block" : "none";
-  });
-}
 
 // 存放地點：表單裡的按鈕選單（單選）
 function setupLocationField() {
@@ -398,7 +385,7 @@ function setupForm() {
           (t) => t.type === "purchase" && t.sourcePurchaseId === state.editingId
         );
         if (existingTx) {
-          await transactionsRef.doc(existingTx.id).update({
+          const txUpdate = {
             productId,
             productName: payload.name,
             baseUnit: payload.baseUnit,
@@ -409,7 +396,39 @@ function setupForm() {
             packUnit: payload.packUnit,
             packSize: payload.packSize,
             date: payload.purchaseDate,
-          });
+          };
+          const oldProductId = existingTx.productId;
+          if (oldProductId && oldProductId !== productId) {
+            // 品項身分（品名／最小單位／地點）改變了。只有在「這是舊身分底下唯一一筆採購」時，
+            // 才能安全地把整個品項的完整歷史（含使用／調整紀錄）一起搬到新身分底下；
+            // 如果舊身分底下還有其他採購批次，使用紀錄可能是共用的，就不強行搬動，
+            // 避免搬錯對象——這種情況只會更新這一筆採購自己的異動。
+            const otherPurchasesUnderOld = state.transactions.filter(
+              (t) => t.productId === oldProductId && t.type === "purchase" && t.id !== existingTx.id
+            );
+            if (otherPurchasesUnderOld.length === 0) {
+              const relatedTxs = state.transactions.filter((t) => t.productId === oldProductId);
+              const batch = db.batch();
+              relatedTxs.forEach((t) => {
+                if (t.id === existingTx.id) {
+                  batch.update(transactionsRef.doc(t.id), txUpdate);
+                } else {
+                  batch.update(transactionsRef.doc(t.id), {
+                    productId,
+                    productName: payload.name,
+                    baseUnit: payload.baseUnit,
+                    category: payload.category,
+                    location: payload.location,
+                  });
+                }
+              });
+              await batch.commit();
+            } else {
+              await transactionsRef.doc(existingTx.id).update(txUpdate);
+            }
+          } else {
+            await transactionsRef.doc(existingTx.id).update(txUpdate);
+          }
         } else {
           await transactionsRef.add({
             productId,
@@ -512,7 +531,7 @@ function getFormPayload() {
     price: priceVal === "" ? null : Number(priceVal),
     purchaser: document.getElementById("f-purchaser").value.trim(),
     location: getSelectedFormLocation(),
-    expiryDate: category === "醫療保健" && expiryVal ? expiryVal : null,
+    expiryDate: expiryVal || null,
     note: document.getElementById("f-note").value.trim(),
   };
 }
@@ -523,7 +542,6 @@ function resetForm() {
   document.getElementById("f-purchaseDate").value = todayStr();
   document.getElementById("f-customBaseUnit-wrap").style.display = "none";
   document.getElementById("f-customPackUnit-wrap").style.display = "none";
-  document.getElementById("f-expiry-wrap").style.display = "none";
   setFormLocation(LOCATIONS[0]);
   document.getElementById("form-title").textContent = "新增採購紀錄";
   document.getElementById("cancel-edit-btn").style.display = "none";
@@ -536,8 +554,7 @@ function startEdit(record) {
   state.editingId = record.id;
   document.getElementById("f-name").value = record.name;
   document.getElementById("f-category").value = record.category;
-  document.getElementById("f-expiry-wrap").style.display = record.category === "醫療保健" ? "block" : "none";
-  document.getElementById("f-expiryDate").value = record.expiryDate || "";
+  document.getElementById("f-expiryDate").value = (record.expiryDate || "").slice(0, 7);
   setFormLocation(record.location);
 
   const baseUnitSel = document.getElementById("f-baseUnit");
@@ -601,18 +618,57 @@ async function doDelete(id) {
 
 // ---- 篩選欄 ----
 function setupFilters() {
-  document.getElementById("inv-search").addEventListener("input", (e) => {
+  const invSearchInput = document.getElementById("inv-search");
+  const invSearchClear = document.getElementById("inv-search-clear");
+  invSearchInput.addEventListener("input", (e) => {
     state.invSearch = e.target.value;
+    state.invPage = 1;
+    invSearchClear.hidden = e.target.value.length === 0;
+    renderInventory();
+  });
+  invSearchClear.addEventListener("click", () => {
+    invSearchInput.value = "";
+    invSearchClear.hidden = true;
+    invSearchInput.focus();
+    state.invSearch = "";
     state.invPage = 1;
     renderInventory();
   });
-  document.getElementById("val-search").addEventListener("input", (e) => {
+
+  const valSearchInput = document.getElementById("val-search");
+  const valSearchClear = document.getElementById("val-search-clear");
+  valSearchInput.addEventListener("input", (e) => {
     state.valSearch = e.target.value;
+    valSearchClear.hidden = e.target.value.length === 0;
     renderValue();
   });
-  document.getElementById("val-category-filter").addEventListener("change", (e) => {
-    state.valCategory = e.target.value;
+  valSearchClear.addEventListener("click", () => {
+    valSearchInput.value = "";
+    valSearchClear.hidden = true;
+    valSearchInput.focus();
+    state.valSearch = "";
     renderValue();
+  });
+}
+
+// 性價比比較的分類按鈕（設計同庫存總覽）
+function setupValFilterButtons() {
+  const catContainer = document.getElementById("val-category-buttons");
+  catContainer.innerHTML = ["全部", ...CATEGORIES].map((c) =>
+    `<button type="button" class="status-filter-btn" data-category="${escapeHtml(c)}">${escapeHtml(c)}</button>`
+  ).join("");
+  catContainer.querySelectorAll("[data-category]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.valCategory = btn.dataset.category;
+      renderValue();
+    });
+  });
+  updateValFilterButtonActiveStates();
+}
+
+function updateValFilterButtonActiveStates() {
+  document.querySelectorAll("#val-category-buttons [data-category]").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.category === state.valCategory);
   });
 }
 
@@ -832,18 +888,29 @@ function getLatestPurchaseExpiry(key) {
   return record ? (record.expiryDate || "") : "";
 }
 
-// 依有效期限判斷顯示的標籤（過期／即將到期／正常）
-function expiryBadgeHtml(expiryDate) {
-  if (!expiryDate) return "";
-  const today = todayStr();
-  if (expiryDate < today) {
-    return `<span class="expiry-badge expiry-expired">⚠️ 已過期（${fmtDate(expiryDate)}）</span>`;
+// 年月格式化，例如 "2026-08" → "2026/08"；相容舊資料可能存的完整日期（只取前7碼）
+function fmtYearMonth(ym) {
+  const clean = (ym || "").slice(0, 7);
+  if (!clean) return "—";
+  const [y, m] = clean.split("-");
+  return `${y}/${m}`;
+}
+
+// 依有效期限（年月）判斷顯示的標籤（過期／即將到期／正常）
+function expiryBadgeHtml(expiryYearMonth) {
+  const ym = (expiryYearMonth || "").slice(0, 7);
+  if (!ym) return "";
+  const currentYm = todayStr().slice(0, 7);
+  if (ym < currentYm) {
+    return `<span class="expiry-badge expiry-expired">⚠️ 已過期（${fmtYearMonth(ym)}）</span>`;
   }
-  const daysLeft = Math.ceil((new Date(expiryDate) - new Date(today)) / 86400000);
-  if (daysLeft <= 30) {
-    return `<span class="expiry-badge expiry-soon">⏳ ${fmtDate(expiryDate)} 到期</span>`;
+  const [ey, em] = ym.split("-").map(Number);
+  const [cy, cm] = currentYm.split("-").map(Number);
+  const monthsLeft = (ey - cy) * 12 + (em - cm);
+  if (monthsLeft <= 2) {
+    return `<span class="expiry-badge expiry-soon">⏳ ${fmtYearMonth(ym)} 到期</span>`;
   }
-  return `<span class="expiry-badge expiry-ok">🗓️ 效期至 ${fmtDate(expiryDate)}</span>`;
+  return `<span class="expiry-badge expiry-ok">🗓️ 效期至 ${fmtYearMonth(ym)}</span>`;
 }
 
 function filterInventoryList(list) {
@@ -1365,6 +1432,7 @@ function computeValueGroups() {
 }
 
 function renderValue() {
+  updateValFilterButtonActiveStates();
   const list = computeValueGroups();
   const container = document.getElementById("value-list");
   if (list.length === 0) {

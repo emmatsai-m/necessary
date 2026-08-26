@@ -93,9 +93,9 @@
             <select id="f-category"></select>
           </div>
 
-          <div class="field" id="f-expiry-wrap" style="display:none">
-            <label class="field-label">有效期限</label>
-            <input type="date" id="f-expiryDate" />
+          <div class="field" id="f-expiry-wrap">
+            <label class="field-label">有效期限（選填，年月即可）</label>
+            <input type="month" id="f-expiryDate" />
           </div>
 
           <div class="spec-box">
@@ -182,6 +182,7 @@
         <div class="search-wrap">
           <span class="icon">🔍</span>
           <input type="text" id="inv-search" placeholder="搜尋品名" />
+          <button type="button" class="search-clear-btn" id="inv-search-clear" aria-label="清除搜尋" hidden>✕</button>
         </div>
       </div>
       <div class="status-filter-row" id="inv-status-filter">
@@ -195,12 +196,13 @@
 
     <!-- 性價比比較頁 -->
     <section id="tab-value" class="tab-panel" hidden>
+      <div class="filter-btn-row" id="val-category-buttons"></div>
       <div class="filter-row">
         <div class="search-wrap">
           <span class="icon">🔍</span>
           <input type="text" id="val-search" placeholder="搜尋品名" />
+          <button type="button" class="search-clear-btn" id="val-search-clear" aria-label="清除搜尋" hidden>✕</button>
         </div>
-        <select id="val-category-filter"></select>
       </div>
       <div id="value-list" class="value-list"></div>
     </section>
