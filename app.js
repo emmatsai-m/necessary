@@ -805,7 +805,7 @@ function computeInventoryMap() {
         current: 0,
         lastPurchaseDate: null,
         lastUsedDate: null,
-        _latestDate: null,
+        _latestPurchaseDate: null,
       });
     }
     const g = map.get(key);
@@ -815,19 +815,20 @@ function computeInventoryMap() {
     if (t.type === "purchase") {
       g.purchased += qty;
       if (!g.lastPurchaseDate || t.date > g.lastPurchaseDate) g.lastPurchaseDate = t.date;
+      // 品名／分類／單位／地點只以「採購」異動為準（用最新一筆採購），
+      // 使用／調整紀錄本身沒有可靠的地點資料，不該讓它們覆蓋掉正確的地點顯示。
+      if (!g._latestPurchaseDate || t.date >= g._latestPurchaseDate) {
+        g.name = t.productName;
+        g.unit = t.baseUnit;
+        g.category = t.category;
+        g.location = t.location || "";
+        g._latestPurchaseDate = t.date;
+      }
     } else if (t.type === "usage") {
       g.used += Math.abs(qty);
       if (!g.lastUsedDate || t.date > g.lastUsedDate) g.lastUsedDate = t.date;
     } else if (t.type === "adjustment") {
       g.adjustment += qty;
-    }
-    // 品名／分類／單位／地點以最新一筆異動為準（例如編輯採購紀錄改了名稱）
-    if (!g._latestDate || t.date >= g._latestDate) {
-      g.name = t.productName;
-      g.unit = t.baseUnit;
-      g.category = t.category;
-      g.location = t.location || "";
-      g._latestDate = t.date;
     }
   }
   return map;
@@ -1227,6 +1228,7 @@ async function confirmUsage() {
     productName: g.name,
     baseUnit: g.unit,
     category: g.category,
+    location: g.location,
     type: "usage",
     quantity: -baseQty,
     packQty: packInfo ? packInfo.packQty : null,
