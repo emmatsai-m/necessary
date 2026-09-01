@@ -123,11 +123,11 @@ function setupLocationField() {
 }
 function getSelectedFormLocation() {
   const activeBtn = document.querySelector("#f-location-buttons .location-btn.active");
-  return activeBtn ? activeBtn.dataset.location : LOCATIONS[0];
+  return activeBtn ? activeBtn.dataset.location : null;
 }
 function setFormLocation(loc) {
   document.querySelectorAll("#f-location-buttons .location-btn").forEach((b) => {
-    b.classList.toggle("active", b.dataset.location === (loc || LOCATIONS[0]));
+    b.classList.toggle("active", !!loc && b.dataset.location === loc);
   });
 }
 
@@ -519,6 +519,11 @@ function getFormPayload() {
   const priceVal = document.getElementById("f-price").value;
   const category = document.getElementById("f-category").value;
   const expiryVal = document.getElementById("f-expiryDate").value;
+  const location = getSelectedFormLocation();
+  if (!location) {
+    alert("請選擇存放地點（台北／新竹）。");
+    return null;
+  }
 
   return {
     name,
@@ -530,7 +535,7 @@ function getFormPayload() {
     purchaseDate: document.getElementById("f-purchaseDate").value || todayStr(),
     price: priceVal === "" ? null : Number(priceVal),
     purchaser: document.getElementById("f-purchaser").value.trim(),
-    location: getSelectedFormLocation(),
+    location,
     expiryDate: expiryVal || null,
     note: document.getElementById("f-note").value.trim(),
   };
@@ -542,7 +547,7 @@ function resetForm() {
   document.getElementById("f-purchaseDate").value = todayStr();
   document.getElementById("f-customBaseUnit-wrap").style.display = "none";
   document.getElementById("f-customPackUnit-wrap").style.display = "none";
-  setFormLocation(LOCATIONS[0]);
+  setFormLocation(null);
   document.getElementById("form-title").textContent = "新增採購紀錄";
   document.getElementById("cancel-edit-btn").style.display = "none";
   document.getElementById("submit-btn").innerHTML = "➕ 新增紀錄";
