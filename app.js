@@ -42,7 +42,7 @@ const state = {
   invSearch: "",
   invCategory: "全部",
   invLocation: "全部",
-  invStatusFilter: "all", // all | low | out
+  invStatusFilter: "all", // all | low | out | expiring
   invPage: 1,
   expandedKey: null,
   valSearch: "",
@@ -712,12 +712,23 @@ function updateInvFilterButtonActiveStates() {
 
 function setupStatusFilter() {
   document.querySelectorAll("#inv-status-filter .status-filter-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      state.invStatusFilter = btn.dataset.status;
-      document.querySelectorAll("#inv-status-filter .status-filter-btn").forEach((b) => b.classList.toggle("active", b === btn));
-      state.invPage = 1;
-      renderInventory();
-    });
+    btn.addEventListener("click", () => setInvStatusFilter(btn.dataset.status));
+  });
+}
+
+// 統一的「切換庫存狀態篩選」入口，同時給頂端篩選鈕與統計格的連結按鈕使用，
+// 切換後會捲動到庫存卡片區塊，方便使用者立刻看到篩選結果。
+function setInvStatusFilter(status) {
+  state.invStatusFilter = status;
+  state.invPage = 1;
+  renderInventory();
+  const grid = document.getElementById("inventory-grid");
+  if (grid) grid.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function updateStatusFilterActiveStates() {
+  document.querySelectorAll("#inv-status-filter .status-filter-btn").forEach((b) => {
+    b.classList.toggle("active", b.dataset.status === state.invStatusFilter);
   });
 }
 
@@ -844,7 +855,8 @@ function computeInventoryList() {
     const packSpec = getLatestPackSpec(g.key);
     const latestNote = getLatestPurchaseNote(g.key);
     const latestExpiry = getLatestPurchaseExpiry(g.key);
-    return { ...g, minimumStock, status, packSpec, latestNote, latestExpiry };
+    const expiryStatus = getExpiryStatus(latestExpiry);
+    return { ...g, minimumStock, status, packSpec, latestNote, latestExpiry, expiryStatus };
   });
 }
 
@@ -897,18 +909,28 @@ function fmtYearMonth(ym) {
   return `${y}/${m}`;
 }
 
+// 依有效期限（年月）判斷狀態：none（未填）／expired（已過期）／soon（2個月內到期）／ok（正常）
+function getExpiryStatus(expiryYearMonth) {
+  const ym = (expiryYearMonth || "").slice(0, 7);
+  if (!ym) return "none";
+  const currentYm = todayStr().slice(0, 7);
+  if (ym < currentYm) return "expired";
+  const [ey, em] = ym.split("-").map(Number);
+  const [cy, cm] = currentYm.split("-").map(Number);
+  const monthsLeft = (ey - cy) * 12 + (em - cm);
+  if (monthsLeft <= 2) return "soon";
+  return "ok";
+}
+
 // 依有效期限（年月）判斷顯示的標籤（過期／即將到期／正常）
 function expiryBadgeHtml(expiryYearMonth) {
   const ym = (expiryYearMonth || "").slice(0, 7);
   if (!ym) return "";
-  const currentYm = todayStr().slice(0, 7);
-  if (ym < currentYm) {
+  const status = getExpiryStatus(expiryYearMonth);
+  if (status === "expired") {
     return `<span class="expiry-badge expiry-expired">⚠️ 已過期（${fmtYearMonth(ym)}）</span>`;
   }
-  const [ey, em] = ym.split("-").map(Number);
-  const [cy, cm] = currentYm.split("-").map(Number);
-  const monthsLeft = (ey - cy) * 12 + (em - cm);
-  if (monthsLeft <= 2) {
+  if (status === "soon") {
     return `<span class="expiry-badge expiry-soon">⏳ ${fmtYearMonth(ym)} 到期</span>`;
   }
   return `<span class="expiry-badge expiry-ok">🗓️ 效期至 ${fmtYearMonth(ym)}</span>`;
@@ -924,6 +946,7 @@ function filterInventoryList(list) {
   if (state.invLocation !== "全部") out = out.filter((g) => g.location === state.invLocation);
   if (state.invStatusFilter === "low") out = out.filter((g) => g.status === "low");
   if (state.invStatusFilter === "out") out = out.filter((g) => g.status === "out");
+  if (state.invStatusFilter === "expiring") out = out.filter((g) => g.expiryStatus === "soon" || g.expiryStatus === "expired");
   if (state.invSearch.trim()) {
     const q = state.invSearch.trim().toLowerCase();
     out = out.filter((g) => g.name.toLowerCase().includes(q));
@@ -933,19 +956,33 @@ function filterInventoryList(list) {
 
 function renderInvStats(allList) {
   const total = allList.length;
-  const ok = allList.filter((g) => g.status === "ok").length;
   const low = allList.filter((g) => g.status === "low").length;
   const out = allList.filter((g) => g.status === "out").length;
+  const expiring = allList.filter((g) => g.expiryStatus === "soon" || g.expiryStatus === "expired").length;
+
+  const isActive = (status) => (state.invStatusFilter === status ? "active" : "");
+
   document.getElementById("inv-stats").innerHTML = `
     <div class="inv-stat-card"><span class="num mono">${total}</span><span class="label">📦 商品種類</span></div>
-    <div class="inv-stat-card stat-ok"><span class="num mono">${ok}</span><span class="label">🟢 有庫存</span></div>
-    <div class="inv-stat-card stat-low"><span class="num mono">${low}</span><span class="label">🟡 低庫存</span></div>
-    <div class="inv-stat-card stat-out"><span class="num mono">${out}</span><span class="label">🔴 缺貨</span></div>
+    <button type="button" class="inv-stat-card inv-stat-link stat-low ${isActive("low")}" data-status="low">
+      <span class="num mono">${low}</span><span class="label">🟡 低庫存</span>
+    </button>
+    <button type="button" class="inv-stat-card inv-stat-link stat-out ${isActive("out")}" data-status="out">
+      <span class="num mono">${out}</span><span class="label">🔴 缺貨</span>
+    </button>
+    <button type="button" class="inv-stat-card inv-stat-link stat-expiring ${isActive("expiring")}" data-status="expiring">
+      <span class="num mono">${expiring}</span><span class="label">⏳ 快過期</span>
+    </button>
   `;
+
+  document.getElementById("inv-stats").querySelectorAll("[data-status]").forEach((btn) => {
+    btn.addEventListener("click", () => setInvStatusFilter(btn.dataset.status));
+  });
 }
 
 function renderInventory() {
   updateInvFilterButtonActiveStates();
+  updateStatusFilterActiveStates();
 
   const allList = computeInventoryList();
   renderInvStats(allList);

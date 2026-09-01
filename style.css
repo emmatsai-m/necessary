@@ -278,9 +278,17 @@ label.field-label {
 }
 .inv-stat-card .num { font-size: 22px; font-weight: 700; display: block; }
 .inv-stat-card .label { font-size: 11.5px; color: var(--ink-soft); font-weight: 700; }
-.inv-stat-card.stat-ok .num { color: var(--sage-deep); }
 .inv-stat-card.stat-low .num { color: var(--mustard); }
 .inv-stat-card.stat-out .num { color: var(--terracotta-deep); }
+.inv-stat-card.stat-expiring .num { color: var(--rose-deep); }
+
+/* 統計格中可點擊的連結按鈕（低庫存／缺貨／快過期），點擊即篩選庫存總覽 */
+button.inv-stat-link {
+  font-family: inherit; cursor: pointer; width: 100%; transition: transform .1s ease, box-shadow .15s ease, border-color .15s ease;
+}
+button.inv-stat-link:hover { border-color: var(--ink-soft); box-shadow: 0 2px 6px rgba(58,50,38,0.08); transform: translateY(-1px); }
+button.inv-stat-link:active { transform: translateY(0); }
+button.inv-stat-link.active { border-color: var(--delft); box-shadow: 0 0 0 2px rgba(63,110,140,0.18) inset; }
 
 /* ===== 狀態篩選鈕 ===== */
 .status-filter-row { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
