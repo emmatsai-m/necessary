@@ -13,6 +13,7 @@ const PACK_UNITS = ["罐", "瓶", "包", "條", "盒", "箱", "組", "個", "其
 const LOCATIONS = ["台北", "新竹"];
 const MINIMUM_STOCK_DEFAULT = 1; // 最低庫存量，目前全品項統一預設
 const INV_PAGE_SIZE = 12; // 庫存總覽每頁顯示的卡片數
+const VAL_PAGE_SIZE = 12; // 性價比比較每頁顯示的品項數
 
 // 閒置多久（分鐘）沒有操作就自動登出，需要重新輸入信箱密碼；設成 0 表示停用這個機制。
 const IDLE_TIMEOUT_MINUTES = 60;
@@ -47,6 +48,7 @@ const state = {
   expandedKey: null,
   valSearch: "",
   valCategory: "全部",
+  valPage: 1,
   usageModalKey: null,
   usageEditId: null,
   detailModalKey: null,
@@ -644,6 +646,7 @@ function setupFilters() {
   const valSearchClear = document.getElementById("val-search-clear");
   valSearchInput.addEventListener("input", (e) => {
     state.valSearch = e.target.value;
+    state.valPage = 1;
     valSearchClear.hidden = e.target.value.length === 0;
     renderValue();
   });
@@ -652,6 +655,7 @@ function setupFilters() {
     valSearchClear.hidden = true;
     valSearchInput.focus();
     state.valSearch = "";
+    state.valPage = 1;
     renderValue();
   });
 }
@@ -665,6 +669,7 @@ function setupValFilterButtons() {
   catContainer.querySelectorAll("[data-category]").forEach((btn) => {
     btn.addEventListener("click", () => {
       state.valCategory = btn.dataset.category;
+      state.valPage = 1;
       renderValue();
     });
   });
@@ -1068,33 +1073,31 @@ function renderInventory() {
   renderInvPagination(filtered.length, totalPages);
 }
 
-function renderInvPagination(totalItems, totalPages) {
-  const el = document.getElementById("inv-pagination");
-  if (totalItems <= INV_PAGE_SIZE) {
-    el.innerHTML = "";
-    return;
-  }
-  el.innerHTML = `
-    <button type="button" class="page-btn" id="inv-page-prev" ${state.invPage <= 1 ? "disabled" : ""}>‹ 上一頁</button>
-    <span class="page-info">第 ${state.invPage} / ${totalPages} 頁</span>
-    <button type="button" class="page-btn" id="inv-page-next" ${state.invPage >= totalPages ? "disabled" : ""}>下一頁 ›</button>
+// 通用的分頁列渲染：可以同時渲染到「上方」與「下方」兩個容器，並且各自綁定按鈕事件
+function renderPaginationInto(elIds, currentPage, totalPages, totalItems, pageSize, onChange) {
+  const html = totalItems <= pageSize ? "" : `
+    <button type="button" class="page-btn" data-page-action="prev" ${currentPage <= 1 ? "disabled" : ""}>‹ 上一頁</button>
+    <span class="page-info">第 ${currentPage} / ${totalPages} 頁</span>
+    <button type="button" class="page-btn" data-page-action="next" ${currentPage >= totalPages ? "disabled" : ""}>下一頁 ›</button>
   `;
-  const prevBtn = document.getElementById("inv-page-prev");
-  const nextBtn = document.getElementById("inv-page-next");
-  if (prevBtn) {
-    prevBtn.addEventListener("click", () => {
-      state.invPage -= 1;
-      renderInventory();
-      document.getElementById("inventory-grid").scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-  }
-  if (nextBtn) {
-    nextBtn.addEventListener("click", () => {
-      state.invPage += 1;
-      renderInventory();
-      document.getElementById("inventory-grid").scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-  }
+  elIds.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = html;
+    if (!html) return;
+    const prevBtn = el.querySelector('[data-page-action="prev"]');
+    const nextBtn = el.querySelector('[data-page-action="next"]');
+    if (prevBtn) prevBtn.addEventListener("click", () => onChange(currentPage - 1));
+    if (nextBtn) nextBtn.addEventListener("click", () => onChange(currentPage + 1));
+  });
+}
+
+function renderInvPagination(totalItems, totalPages) {
+  renderPaginationInto(["inv-pagination-top", "inv-pagination"], state.invPage, totalPages, totalItems, INV_PAGE_SIZE, (page) => {
+    state.invPage = page;
+    renderInventory();
+    document.getElementById("inventory-grid").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 }
 
 // 點卡片上的「編輯」＝編輯這個品項最新一筆採購紀錄
@@ -1479,12 +1482,21 @@ function renderValue() {
   updateValFilterButtonActiveStates();
   const list = computeValueGroups();
   const container = document.getElementById("value-list");
+
+  const totalPages = Math.max(1, Math.ceil(list.length / VAL_PAGE_SIZE));
+  if (state.valPage > totalPages) state.valPage = totalPages;
+  if (state.valPage < 1) state.valPage = 1;
+
   if (list.length === 0) {
     container.innerHTML = `<div class="empty-state"><p>目前沒有含金額的紀錄可以比較，新增時記得填寫金額。</p></div>`;
+    renderValPagination(0, 1);
     return;
   }
 
-  container.innerHTML = list.map((g) => {
+  const startIdx = (state.valPage - 1) * VAL_PAGE_SIZE;
+  const pageList = list.slice(startIdx, startIdx + VAL_PAGE_SIZE);
+
+  container.innerHTML = pageList.map((g) => {
     const cat = catClass(g.category);
     const rowsHtml = g.items.map((r, i) => {
       const up = unitPrice(r);
@@ -1515,5 +1527,15 @@ function renderValue() {
 
   container.querySelectorAll("[data-action='edit']").forEach((btn) => {
     btn.addEventListener("click", () => handleRowAction("edit", btn.dataset.id));
+  });
+
+  renderValPagination(list.length, totalPages);
+}
+
+function renderValPagination(totalItems, totalPages) {
+  renderPaginationInto(["val-pagination-top", "val-pagination"], state.valPage, totalPages, totalItems, VAL_PAGE_SIZE, (page) => {
+    state.valPage = page;
+    renderValue();
+    document.getElementById("value-list").scrollIntoView({ behavior: "smooth", block: "start" });
   });
 }

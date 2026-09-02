@@ -404,6 +404,9 @@ button.inv-stat-link.active { border-color: var(--delft); box-shadow: 0 0 0 2px 
 
 /* ===== 分頁控制 ===== */
 .pagination-row { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 18px; }
+.pagination-row:empty { margin: 0; }
+.pagination-row-top { margin-top: 0; margin-bottom: 14px; }
+.pagination-row-top:empty { margin: 0; }
 .page-btn {
   border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 8px 14px;
   font-size: 13px; font-weight: 700; color: var(--ink); cursor: pointer; min-height: 40px;
