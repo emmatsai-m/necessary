@@ -1016,9 +1016,18 @@ function renderInventory() {
     const cat = catClass(g.category);
     const statusLabel = g.status === "out" ? "🔴 缺貨" : g.status === "low" ? "🟡 庫存偏低" : "🟢 有庫存";
     const ps = g.packSpec;
-    const approxCurrent = ps ? `<span class="approx-pack">約 ${fmtNum(g.current / ps.packSize, 1)} ${escapeHtml(ps.packUnit)}</span>` : "";
-    const approxPurchased = ps ? ` (${fmtNum(g.purchased / ps.packSize, 1)}${escapeHtml(ps.packUnit)})` : "";
-    const approxUsed = ps ? ` (${fmtNum(g.used / ps.packSize, 1)}${escapeHtml(ps.packUnit)})` : "";
+    const currentRowHtml = ps
+      ? `<span class="num mono">${fmtNum(g.current / ps.packSize, 1)}</span>
+         <span class="unit">${escapeHtml(ps.packUnit)} 現有庫存</span>
+         <span class="approx-pack">＝ ${fmtNum(g.current)} ${escapeHtml(g.unit)}</span>`
+      : `<span class="num mono">${fmtNum(g.current)}</span>
+         <span class="unit">${escapeHtml(g.unit)} 現有庫存</span>`;
+    const purchasedValHtml = ps
+      ? `${fmtNum(g.purchased / ps.packSize, 1)}${escapeHtml(ps.packUnit)}（${fmtNum(g.purchased)}${escapeHtml(g.unit)}）`
+      : `${fmtNum(g.purchased)} ${escapeHtml(g.unit)}`;
+    const usedValHtml = ps
+      ? `${fmtNum(g.used / ps.packSize, 1)}${escapeHtml(ps.packUnit)}（${fmtNum(g.used)}${escapeHtml(g.unit)}）`
+      : `${fmtNum(g.used)} ${escapeHtml(g.unit)}`;
     return `
       <div class="inv-card">
         <div class="inv-card-head">
@@ -1032,14 +1041,12 @@ function renderInventory() {
           </div>
 
           <div class="inv-current-row">
-            <span class="num mono">${fmtNum(g.current)}</span>
-            <span class="unit">${escapeHtml(g.unit)} 現有庫存</span>
-            ${approxCurrent}
+            ${currentRowHtml}
           </div>
 
           <div class="inv-stock-rows">
-            <div class="inv-stock-row"><span>累計購入</span><span class="val">${fmtNum(g.purchased)} ${escapeHtml(g.unit)}${approxPurchased}</span></div>
-            <div class="inv-stock-row"><span>已使用</span><span class="val">${fmtNum(g.used)} ${escapeHtml(g.unit)}${approxUsed}</span></div>
+            <div class="inv-stock-row"><span>累計購入</span><span class="val">${purchasedValHtml}</span></div>
+            <div class="inv-stock-row"><span>已使用</span><span class="val">${usedValHtml}</span></div>
           </div>
 
           <div class="inv-dates">
@@ -1188,9 +1195,11 @@ function closeUsageModal() {
 }
 
 function renderUsageStockLine(g) {
-  let text = `目前庫存：${fmtNum(g.current)} ${g.unit}`;
+  let text;
   if (usagePackSpec && usagePackSpec.packSize > 0) {
-    text += `（約 ${fmtNum(g.current / usagePackSpec.packSize, 1)} ${usagePackSpec.packUnit}）`;
+    text = `目前庫存：${fmtNum(g.current / usagePackSpec.packSize, 1)} ${usagePackSpec.packUnit}（＝ ${fmtNum(g.current)} ${g.unit}）`;
+  } else {
+    text = `目前庫存：${fmtNum(g.current)} ${g.unit}`;
   }
   document.getElementById("usage-current-stock").textContent = text;
 }
